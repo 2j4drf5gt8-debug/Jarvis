@@ -1,0 +1,1 @@
+../../supabase/functions/jarvis-ask/core.js
