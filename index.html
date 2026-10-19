@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Jarvis</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Jarvis">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:wght@200;300;400;500&family=Saira+Semi+Condensed:wght@300;400;500&family=Share+Tech+Mono&display=swap">
+<link rel="stylesheet" href="css/jarvis.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="boot" aria-hidden="true"><div><pre id="bootlog"></pre><div class="bb"><i id="bootbar"></i></div></div></div>
+
+<section class="stage">
+  <canvas id="env" aria-hidden="true"></canvas>
+  <canvas id="bats" aria-hidden="true"></canvas>
+  <div class="flash" id="flash"></div>
+  <div class="beamx"></div><div class="alo"></div><div class="alb"></div><div class="due"></div>
+  <div class="ret" aria-hidden="true"><i></i><i></i><b></b><span>ZIEL ERFASST · EUROPA</span></div>
+  <canvas id="gl" role="button" tabindex="0" aria-label="Jarvis-Globus, antippen zum Sprechen"></canvas>
+  <div class="geo" id="geoO">Oviedo<small>43.3614° N · 5.8494° W</small></div>
+  <div class="geo" id="geoL">Leer<small>53.2318° N · 7.4609° E</small></div>
+
+  <div class="hud">
+    <div class="chips" aria-label="Status"><span class="r" id="chipMission">PRAKTIKUM · NOCH KEINE ZUSAGE</span><span id="chipWeek">BEWERBUNGEN DIESE WOCHE 0 / 3</span><span id="chipDue" hidden></span><span id="chipNet">VERBINDUNG VERSCHLÜSSELT</span></div>
+    <header class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="#e4e6e8"><circle cx="32" cy="32" r="29" stroke-opacity=".5"/><circle cx="32" cy="32" r="23" stroke-width="4" stroke-dasharray="8 4" stroke-opacity=".8"/><polygon points="32,20 42.4,26 42.4,38 32,44 21.6,38 21.6,26" stroke-width="1.5"/></g><circle cx="32" cy="32" r="5" fill="#fff"/></svg>
+      <div><small>GASPAR TECH</small><b>J.A.R.V.I.S.</b>
+        <nav aria-label="Befehle"><a href="#" data-cmd="scan">Scan</a><i>·</i><a href="#" data-cmd="fallakte">Fallakte</a><i>·</i><a href="#" data-cmd="neu laden">Neu laden</a><i>·</i><a href="#" data-cmd="hilfe">Hilfe</a><i>·</i><a href="#" id="logout">Abmelden</a></nav></div>
+    </header>
+    <div class="clock"><b id="t">--:--:--</b><span id="d"></span>
+      <div class="wx"><svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true" fill="none" stroke="#e4e6e8" stroke-width="1.3"><circle cx="13" cy="13" r="5"/><path d="M13 3v3M13 20v3M3 13h3M20 13h3M6 6l2 2M18 18l2 2M6 20l2-2M18 8l2-2"/><path d="M12 30h16a5 5 0 0 0 0-10 7 7 0 0 0-13 2 4 4 0 0 0-3 8z" fill="#000"/></svg><div><b id="wxT">–</b><small id="wxS">OVIEDO</small></div></div>
+      <button class="dmb" id="snd" type="button" aria-pressed="false"><i></i>TON</button></div>
+
+    <div class="pnl L p1">
+      <div class="t"><span>Bewerbungsnetz</span><em id="appCount">–</em></div>
+      <canvas class="c" id="map" aria-label="Karte mit Bewerbungsorten"></canvas>
+      <div class="kv" id="appList" style="margin-top:10px"></div>
+    </div>
+    <div class="pnl L p2">
+      <div class="t"><span>Heute</span><em id="todoCount"></em></div>
+      <div class="todo" id="todo"></div>
+      <canvas class="c" id="feed" aria-label="Nachtansicht einer Stadt (Dekoration)"></canvas>
+      <div class="live"><span>Satelliten-Feed · Oviedo</span><span>LIVE</span></div>
+    </div>
+    <div class="pnl L p3">
+      <div class="t"><span>Lageanalyse</span><em>HEUTE</em></div>
+      <div class="kv" id="situation"></div>
+      <canvas class="c" id="spk" aria-label="Protein der letzten sieben Tage"></canvas>
+      <div class="sub" id="proAvg" style="margin-top:4px"></div>
+    </div>
+
+    <div class="pnl R q1">
+      <div class="t"><span>Systemstatus</span></div>
+      <div class="kv" id="system"></div>
+    </div>
+    <div class="pnl R q2">
+      <div class="t"><span>Körperstatus</span><em id="weight"></em></div>
+      <div class="body">
+        <svg viewBox="0 0 90 90" aria-hidden="true"><circle cx="45" cy="45" r="38" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="4"/><circle id="ring" cx="45" cy="45" r="38" fill="none" stroke="#e4e6e8" stroke-width="4" stroke-dasharray="0 239" transform="rotate(-90 45 45)"/><circle cx="45" cy="45" r="31" fill="none" stroke="rgba(255,255,255,.18)" stroke-dasharray="2 4"/><text id="ringPct" x="45" y="49" text-anchor="middle" fill="#e4e6e8" font-family="Saira,sans-serif" font-weight="200" font-size="20">0%</text><text x="45" y="62" text-anchor="middle" fill="#a3a8ad" font-family="Saira,sans-serif" font-size="6.5" letter-spacing="1">PROTEIN</text></svg>
+        <div class="kv" id="body"></div>
+      </div>
+    </div>
+    <div class="pnl R q3">
+      <div class="t"><span>Training</span><em id="trainWhen"></em></div>
+      <div style="display:flex;justify-content:space-between;align-items:end;gap:10px"><div><div class="big" id="trainType">–</div><div class="sub" id="trainSub"></div></div><div class="kv" id="trainList" style="grid-template-columns:auto auto"></div></div>
+    </div>
+    <div class="pnl R q4">
+      <div class="t"><span>Letzte Aktivität</span></div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <div class="mode" id="mode">BEREIT</div>
+  <div class="subt">
+    <svg id="mic" viewBox="0 0 60 60" role="button" tabindex="0" aria-label="Sprechen"><circle cx="30" cy="30" r="26" fill="none" stroke="#e4e6e8" stroke-opacity=".6"/><g stroke="#fff" stroke-width="1.2" opacity=".9"><path d="M30 12v36M12 30h36M17 17l26 26M43 17L17 43"/></g><circle cx="30" cy="30" r="6" fill="#fff"/></svg>
+    <form id="ask"><div class="say" id="say">„Guten Tag, Master Leon.“</div><div class="stamp-line" id="stamp"></div><div class="confirm" id="confirm" hidden><span id="confirmText"></span><button type="button" id="yes">Ja</button><button type="button" id="no">Nein</button></div><input id="q" placeholder="Frage oder Befehl: scan · fallakte · alarm · signal · ton · hilfe" autocomplete="off" aria-label="Frage an Jarvis"></form>
+    <canvas id="w2" aria-hidden="true"></canvas>
+  </div>
+</section>
+
+<div class="case" id="case" hidden role="dialog" aria-label="Fallakte Praktikum">
+  <div class="board">
+    <svg id="strings" viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true"></svg>
+    <div class="ctit">FALLAKTE 01 · PRAKTIKUM<small id="caseSub">WUNSCHSTART 03/2027 · STATUS OFFEN</small></div>
+    <button class="cclose" id="cclose" type="button">SCHLIESSEN ✕</button>
+    <div id="cards"></div>
+  </div>
+</div>
+
+<div class="login" id="login" hidden>
+  <form class="login-box" id="loginForm">
+    <svg viewBox="0 0 64 64" aria-hidden="true"><g fill="none" stroke="#e4e6e8"><circle cx="32" cy="32" r="29" stroke-opacity=".5"/><circle cx="32" cy="32" r="23" stroke-width="4" stroke-dasharray="8 4" stroke-opacity=".8"/></g><circle cx="32" cy="32" r="5" fill="#fff"/></svg>
+    <h1>Identifizierung</h1>
+    <p>Melden Sie sich mit Ihrem Coach-Zugang an, Master Leon.</p>
+    <label for="email">E-Mail</label><input id="email" type="email" autocomplete="email" required>
+    <label for="pw">Passwort</label><input id="pw" type="password" autocomplete="current-password" required>
+    <button type="submit">Zugriff anfordern</button>
+    <div class="err" id="loginErr" role="alert"></div>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="js/land.js"></script>
+<script src="js/scene.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
