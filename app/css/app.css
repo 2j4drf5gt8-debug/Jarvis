@@ -1,0 +1,36 @@
+/* Ergänzungen der App zum Stil des Prototyps */
+[hidden]{display:none!important}
+.chips{top:6px;padding:4px 14px;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.chips span[hidden]{display:none}
+.chips span.g::before{background:var(--ok);box-shadow:none;animation:none}
+.chips span.y::before{background:var(--warn);animation:none}
+.chips span.r2::before{background:#e0404a;box-shadow:0 0 8px #e0404a}
+.empty{grid-column:1/-1;color:var(--dim);text-transform:none;letter-spacing:.02em;font-family:var(--f-ui);font-size:12px}
+.kv b.r{color:#e8707a}
+.stamp-line{font-family:var(--f-data);font-size:10.5px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;margin-top:2px}
+.stamp-line.stale{color:var(--warn)}
+.confirm{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12px;color:var(--ink)}
+.confirm button{background:transparent;border:1px solid var(--line-hi);color:var(--ink);font-family:var(--f-ui);font-size:11px;letter-spacing:.14em;padding:3px 10px;cursor:pointer}
+.confirm button:hover,.confirm button:focus-visible{background:rgba(255,255,255,.1);outline:none}
+.say{white-space:normal;max-height:4.6em;overflow:auto}
+.due{position:absolute;inset:0;z-index:8;pointer-events:none;opacity:0;box-shadow:inset 0 0 70px rgba(220,40,50,.35),inset 0 0 0 1px rgba(255,60,70,.4)}
+body.due-today .due{animation:alp 2.6s ease-in-out infinite}
+.login{position:fixed;inset:0;z-index:55;display:grid;place-items:center;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+.login[hidden]{display:none}
+.login-box{width:min(380px,100%);background:rgba(6,7,9,.9);border:1px solid var(--line);padding:26px 24px;display:flex;flex-direction:column;gap:8px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px)}
+.login-box svg{width:48px;height:48px;align-self:center}
+.login-box h1{margin:4px 0 0;font-weight:200;font-size:22px;letter-spacing:.3em;text-transform:uppercase;text-align:center}
+.login-box p{margin:0 0 8px;color:var(--soft);font-size:13px;text-align:center}
+.login-box label{font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--soft);margin-top:6px}
+.login-box input{background:transparent;border:0;border-bottom:1px solid var(--line-hi);color:var(--ink);font-family:var(--f-ui);font-size:16px;padding:6px 0;outline:none}
+.login-box input:focus{border-bottom-color:var(--ink)}
+.login-box button{margin-top:16px;background:var(--ink);color:#000;border:0;font-family:var(--f-ui);font-weight:500;font-size:12px;letter-spacing:.24em;text-transform:uppercase;padding:11px;cursor:pointer}
+.login-box button:hover,.login-box button:focus-visible{background:#fff;outline:2px solid var(--line-hi);outline-offset:2px}
+.login-box .err{min-height:18px;color:#e8707a;font-size:12px;text-align:center}
+.card .meta{display:block;margin-top:3px;opacity:.75}
+/* Systemstatus in die rechte Spalte statt über den Globus */
+@media (min-width:1151px){
+  .q1{right:max(28px,env(safe-area-inset-right,0px))!important;width:min(310px,22vw)!important;transform:rotateY(-10deg)!important;top:22%}
+  .q2{top:38%}.q3{top:59%}.q4{top:74%}
+}
+@media (max-width:1600px){#chipNet{display:none}}
