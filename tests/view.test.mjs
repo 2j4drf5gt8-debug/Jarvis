@@ -56,3 +56,22 @@ test('offer turns mission green', () => {
   assert.equal(v.mission.label, 'PRAKTIKUM · ZUSAGE ✓');
   assert.equal(v.mission.tone, 'g');
 });
+
+test('todo list sorts by due date, undated last, with labels', () => {
+  const v = viewModel({ ...base, tasks: [
+    { id: 'n', title: 'Ohne Datum', due_date: null },
+    { id: 'l', title: 'Später', due_date: '2026-11-30' },
+    { id: 'h', title: 'Heute', due_date: '2026-10-19' },
+  ] }, now);
+  assert.deepEqual(v.todo.map(t => t.id), ['h', 'l', 'n']);
+  assert.equal(v.todo[0].when, 'HEUTE');
+  assert.equal(v.todo[0].tone, 'r');
+  assert.equal(v.todo[1].when, '30.11.');
+  assert.equal(v.todo[2].when, '–');
+});
+
+test('system shows voice server state', () => {
+  assert.deepEqual(viewModel({ ...base, askState: 'ok' }, now).system[2], ['Sprachserver', 'Bereit', '']);
+  assert.deepEqual(viewModel({ ...base, askState: 'error' }, now).system[2], ['Sprachserver', 'Gestört', 'r']);
+  assert.deepEqual(viewModel(base, now).system[2], ['Sprachserver', 'Ungeprüft', 'n']);
+});

@@ -28,6 +28,14 @@ body.due-today .due{animation:alp 2.6s ease-in-out infinite}
 .login-box button:hover,.login-box button:focus-visible{background:#fff;outline:2px solid var(--line-hi);outline-offset:2px}
 .login-box .err{min-height:18px;color:#e8707a;font-size:12px;text-align:center}
 .card .meta{display:block;margin-top:3px;opacity:.75}
+#feed{height:64px;margin-top:10px}
+.todo{display:flex;flex-direction:column;gap:6px}
+.todo .row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font-size:13px}
+.todo .row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.todo .row b{font-family:var(--f-data);font-weight:400;font-size:11px;letter-spacing:.08em;color:var(--soft)}
+.todo .row b.r{color:#e8707a}.todo .row b.w{color:var(--warn)}
+.todo button{width:18px;height:18px;border:1px solid var(--line-hi);background:transparent;cursor:pointer;padding:0;color:var(--ink);font-size:11px;line-height:16px}
+.todo button:hover,.todo button:focus-visible{background:rgba(255,255,255,.15);outline:none}
 /* Systemstatus in die rechte Spalte statt über den Globus */
 @media (min-width:1151px){
   .q1{right:max(28px,env(safe-area-inset-right,0px))!important;width:min(310px,22vw)!important;transform:rotateY(-10deg)!important;top:22%}

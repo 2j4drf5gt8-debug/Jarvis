@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { buildContext, buildPrompt, parseReply, validateAction } from "./core.js";
+import { buildContext, buildPrompt, parseReply, validateAction, finalizeReply } from "./core.js";
 import { coachToday, nextSession, mission, todayISO } from "./derive.js";
 
 const CORS = {
@@ -22,11 +22,14 @@ async function askGemini(key: string, prompt: string): Promise<{ text?: string; 
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json", temperature: 0.4, maxOutputTokens: 400 },
+        generationConfig: {
+          responseMimeType: "application/json", temperature: 0.4, maxOutputTokens: 1024,
+          ...(model.startsWith("gemini-2.5") ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+        },
       }),
     });
     if (r.status === 429) { quota = true; continue; }
-    if (r.status === 404) continue;
+    if (r.status === 404 || r.status === 400) { console.error(model, r.status, await r.text()); continue; }
     if (!r.ok) throw new Error(`Gemini ${r.status}`);
     const d = await r.json();
     const text = d?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || "").join("") || "";
@@ -101,11 +104,11 @@ Deno.serve(async (req) => {
       if (action.type === "add_task") res = await sb.from("jarvis_tasks").insert({ title: action.title, due_date: action.due_date || null, source: "leon" });
       if (action.type === "complete_task") res = await sb.from("jarvis_tasks").update({ done: true }).eq("id", action.id);
       if (action.type === "mark_mail_done") res = await sb.from("jarvis_mails").update({ done: true }).eq("id", action.id);
-      if (action.type === "set_application_status") res = await sb.from("jarvis_applications").update({ status: action.status }).eq("id", action.id);
       applied = !res?.error;
       if (applied) await sb.from("jarvis_log").insert({ text: `Sprachbefehl: ${action.type.replace(/_/g, " ")}`, status: "erledigt" });
     }
-    return json({ say: reply.say, action: check.ok ? action : { ...action, rejected: check.reason }, applied });
+    const out = finalizeReply(reply, action, check, applied);
+    return json({ say: out.say, action: check.ok ? action : { ...action, rejected: check.reason }, applied });
   }
   return json({ say: reply.say, action: null, applied });
 });

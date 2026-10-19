@@ -4,6 +4,10 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
 const CACHE = 'jarvis-last-model';
+let askState = null;
+export function cachedModel() {
+  try { const m = JSON.parse(localStorage.getItem(CACHE) || 'null'); return m ? { ...m, online: false } : null; } catch { return null; }
+}
 
 export async function session() {
   const { data } = await sb.auth.getSession();
@@ -41,6 +45,7 @@ export async function loadAll() {
       tasks: must(tasks, 'Aufgaben') || [],
       log: must(log, 'Protokoll') || [],
       online: true,
+      askState,
       loadedAt: new Date().toISOString(),
     };
     try { localStorage.setItem(CACHE, JSON.stringify(model)); } catch { /* Speicher nicht verfügbar */ }
@@ -72,9 +77,11 @@ export async function ask(question) {
     });
     if (r.status === 401) return { say: 'Ihre Sitzung ist abgelaufen, Master Leon. Bitte neu anmelden.', action: null, applied: false };
     if (!r.ok) throw new Error(String(r.status));
+    askState = 'ok';
     return await r.json();
   } catch (e) {
     console.error(e);
+    askState = 'error';
     return { say: 'Ich erreiche meinen Server gerade nicht, Master Leon.', action: null, applied: false };
   }
 }

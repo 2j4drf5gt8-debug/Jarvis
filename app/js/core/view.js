@@ -84,8 +84,17 @@ export function viewModel(m, now = new Date()) {
     system: [
       ['Coach-Datenbank', m.online === false ? 'Offline' : 'Online', m.online === false ? 'r' : ''],
       ['Letzter Briefing-Lauf', lastRun ? lastRun.ts : null, ''],
+      ['Sprachserver', { ok: 'Bereit', error: 'Gestört' }[m.askState] || 'Ungeprüft', { ok: '', error: 'r' }[m.askState] ?? 'n'],
     ],
     mails: m.mails || [],
     tasks: open,
+    todo: [...open].sort((a, b) => (a.due_date || '9999') < (b.due_date || '9999') ? -1 : 1).slice(0, 4).map(t => {
+      const lv = deadlineLevel(t.due_date, today);
+      return {
+        id: t.id, title: t.title,
+        when: !t.due_date ? '–' : lv === 'heute' ? (t.due_date < today ? 'ÜBERFÄLLIG' : 'HEUTE') : `${t.due_date.slice(8, 10)}.${t.due_date.slice(5, 7)}.`,
+        tone: lv === 'heute' || lv === 'rot' ? 'r' : lv === 'gelb' ? 'w' : 'n',
+      };
+    }),
   };
 }

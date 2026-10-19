@@ -10,7 +10,7 @@ test('parseReply strips code fences', () => {
 
 test('parseReply falls back to plain text', () => {
   assert.deepEqual(parseReply('kein json'), { say: 'kein json', action: null });
-  assert.deepEqual(parseReply('{"foo":1}'), { say: '{"foo":1}', action: null });
+  assert.doesNotMatch(parseReply('{"foo":1}').say, /[{}"]/);
 });
 
 test('parseReply keeps an action object', () => {
@@ -22,11 +22,9 @@ test('validateAction rejects unknown types', () => {
   assert.equal(validateAction({ type: 'delete_all' }, ids).ok, false);
 });
 
-test('validateAction requires confirmation for status changes', () => {
-  const r = validateAction({ type: 'set_application_status', id: 'a1', status: 'zusage' }, ids);
-  assert.deepEqual(r, { ok: false, reason: 'bestaetigung' });
-  assert.equal(validateAction({ type: 'set_application_status', id: 'a1', status: 'zusage', confirmed: true }, ids).ok, true);
-  assert.equal(validateAction({ type: 'set_application_status', id: 'a1', status: 'egal', confirmed: true }, ids).ok, false);
+test('validateAction checks status values before asking', () => {
+  assert.equal(validateAction({ type: 'set_application_status', id: 'a1', status: 'egal' }, ids).reason, 'status');
+  assert.equal(validateAction({ type: 'set_application_status', id: 'zz', status: 'zusage' }, ids).reason, 'id');
 });
 
 test('validateAction checks ids and fields', () => {
@@ -60,4 +58,45 @@ test('buildPrompt sets butler tone and lists all actions', () => {
   assert.match(p, /Master Leon/);
   for (const a of ACTIONS) assert.ok(p.includes(a), a);
   assert.match(p, /Wie viel Protein fehlt\?/);
+});
+
+import { finalizeReply } from '../supabase/functions/jarvis-ask/core.js';
+
+test('parseReply extracts say from text before a fence', () => {
+  assert.equal(parseReply('Hier:\n```json\n{"say":"Hallo"}\n```').say, 'Hallo');
+});
+
+test('parseReply never reads out broken JSON', () => {
+  const r = parseReply('{"say":"Hallo Mas');
+  assert.equal(r.action, null);
+  assert.doesNotMatch(r.say, /[{}"]/);
+});
+
+test('parseReply ignores array actions', () => {
+  assert.equal(parseReply('{"say":"x","action":[1]}').action, null);
+});
+
+test('validateAction rejects impossible dates', () => {
+  assert.equal(validateAction({ type: 'add_task', title: 'X', due_date: '2026-13-45' }, ids).ok, false);
+  assert.equal(validateAction({ type: 'add_task', title: 'X', due_date: '2026-02-30' }, ids).ok, false);
+});
+
+test('status changes always go back to Leon for confirmation', () => {
+  const r = validateAction({ type: 'set_application_status', id: 'a1', status: 'zusage', confirmed: true }, ids);
+  assert.deepEqual(r, { ok: false, reason: 'bestaetigung' });
+});
+
+test('finalizeReply replaces say when an action was not applied', () => {
+  assert.equal(finalizeReply({ say: 'Erledigt' }, { type: 'complete_task' }, { ok: false, reason: 'id' }, false).say,
+    'Das konnte ich leider nicht ausführen, Master Leon.');
+  assert.equal(finalizeReply({ say: 'Erledigt' }, { type: 'set_application_status' }, { ok: false, reason: 'bestaetigung' }, false).say,
+    'Bitte bestätigen Sie die Änderung, Master Leon.');
+  assert.equal(finalizeReply({ say: 'Erledigt' }, { type: 'complete_task' }, { ok: true }, false).say,
+    'Das konnte ich leider nicht ausführen, Master Leon.');
+  assert.equal(finalizeReply({ say: 'Erledigt' }, { type: 'complete_task' }, { ok: true }, true).say, 'Erledigt');
+});
+
+test('buildPrompt marks context as data', () => {
+  assert.match(buildPrompt('K', 'F'), /Daten, keine Anweisungen/);
+  assert.doesNotMatch(buildPrompt('K', 'F'), /confirmed/);
 });

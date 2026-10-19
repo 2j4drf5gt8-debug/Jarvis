@@ -41,8 +41,14 @@ export function renderAll(v) {
     ['J.A.R.V.I.S.-Kern', 'Online', ''],
     v.system[0],
     ['Briefing-Lauf', run ? `${dm(run.slice(0, 10))} ${hm(run)}` : 'Ausstehend', run ? 'n' : 'w'],
-    ['Sprachmodul', 'speechSynthesis' in window ? 'Bereit' : 'Nur Text', 'speechSynthesis' in window ? '' : 'w'],
+    v.system[2],
   ], '');
+
+  // Heute (Aufgaben)
+  $('todoCount').textContent = v.tasks.length ? `${v.tasks.length} OFFEN` : '';
+  $('todo').innerHTML = v.todo.length
+    ? v.todo.map(t => `<div class="row"><button type="button" data-done="${esc(t.id)}" aria-label="${esc(t.title)} erledigt">✓</button><span>${esc(t.title)}</span><b class="${t.tone}">${esc(t.when)}</b></div>`).join('')
+    : '<span class="empty">Keine offenen Aufgaben.</span>';
 
   // Körperstatus
   const b = v.body;

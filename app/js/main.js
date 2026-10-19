@@ -1,4 +1,4 @@
-import { session, signIn, signOut, loadAll, ask, completeTask, setApplicationStatus, weather } from './data.js';
+import { session, signIn, signOut, loadAll, ask, completeTask, setApplicationStatus, weather, cachedModel } from './data.js';
 import { viewModel } from './core/view.js';
 import { parseCommand } from './core/derive.js';
 import { renderAll, renderWeather } from './render.js';
@@ -111,7 +111,26 @@ document.querySelectorAll('[data-cmd]').forEach(a => a.addEventListener('click',
 $('logout').addEventListener('click', async e => { e.preventDefault(); await signOut(); location.reload(); });
 
 // Login
+$('todo').addEventListener('click', async e => {
+  const b = e.target.closest('[data-done]');
+  if (!b) return;
+  b.disabled = true;
+  try { await completeTask(b.dataset.done); S()?.blip(880); await refresh(); reply('Erledigt, Master Leon.', { voice: false }); }
+  catch (err) { console.error(err); b.disabled = false; reply('Das konnte ich nicht abhaken, Master Leon.', { voice: false }); }
+});
+
 async function start() {
+  const offline = navigator.onLine === false;
+  const cached = cachedModel();
+  if (offline && cached) {
+    // Offline ohne gültige Sitzung: letzten Stand zeigen statt Login
+    view = viewModel(cached);
+    renderAll(view);
+    S()?.type(view.briefing.text);
+    S()?.setMode('OFFLINE');
+    addEventListener('online', () => location.reload(), { once: true });
+    return;
+  }
   if (!(await session())) {
     $('login').hidden = false;
     $('email').focus();
