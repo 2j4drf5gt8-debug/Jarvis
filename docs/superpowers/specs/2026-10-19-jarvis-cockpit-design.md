@@ -1,6 +1,6 @@
 # Jarvis – Bauplan (Design-Spezifikation)
 
-Stand: 19.10.2026 · Status: **zur Freigabe durch Leon**
+Stand: 19.10.2026 · Status: **freigegeben von Leon (19.10.2026, „mach komplett fertig“)**
 
 ## 1. Ziel
 
@@ -33,6 +33,7 @@ Ein persönliches Cockpit („Jarvis“) für Uni, Karriere, Training und Alltag
 | Datenbank | gleiches Supabase-Projekt wie die Coach-App („Coach“), eigene `jarvis_`-Tabellen |
 | Look | Höhlen-Kommandostand mit Leons eigenem KI-Höhlenbild, Holo-Globus, monochrome Glas-Panels |
 | Fristwarnung | gestaffelt (siehe 7.3), Vollalarm nur auf Befehl |
+| Praktikum | offene Hauptmission ohne festen Start; Wunschstart März 2027; Wochenziel 3 Bewerbungen; Nachfass-To-do nach 10 Tagen ohne Antwort; ab Dezember schärferer Ton im Briefing |
 
 ## 3. Architektur
 
@@ -61,7 +62,7 @@ Alle neuen Tabellen: RLS aktiv, Policy „nur angemeldet“ (wie bei Coach).
 
 **`jarvis_mails`** – `id` (Gmail-Message-ID, PK), `received_at`, `from_name`, `subject`, `summary` (1–2 Sätze, keine Volltexte), `category` (`praktikum` | `uni` | `erasmus` | `sonstiges`), `priority` (`hoch` | `normal`), `done` (bool, Standard false), `created_at`.
 
-**`jarvis_applications`** – `id` (uuid), `company`, `role`, `city`, `status` (`entwurf` | `gesendet` | `in_pruefung` | `gespraech` | `zusage` | `absage`), `next_step` (Text, optional), `updated_at`, `notes`.
+**`jarvis_applications`** – `id` (uuid), `company`, `role`, `city`, `lat`, `lon` (für die Karte, optional), `status` (`entwurf` | `gesendet` | `in_pruefung` | `gespraech` | `zusage` | `absage`), `sent_at` (date, gesetzt beim Wechsel auf `gesendet`), `next_step` (Text, optional), `updated_at`, `notes`.
 
 **`jarvis_tasks`** – `id` (uuid), `title`, `due_date` (date, optional), `source` (`jarvis` | `leon`), `source_mail_id` (optional), `done` (bool), `created_at`.
 
@@ -82,7 +83,7 @@ Alle neuen Tabellen: RLS aktiv, Policy „nur angemeldet“ (wie bei Coach).
 | Systemstatus | Erreichbarkeit Supabase / Edge Function, Zeitpunkt letzter Lauf |
 | Wetter | Open-Meteo (kostenlos, ohne Schlüssel), Standort Oviedo |
 | Satelliten-Feed | Deko (keine Daten) |
-| Countdown | festes Datum Praktikumsstart (aktuell angenommen: 01.03.2027 – von Leon zu bestätigen) |
+| Mission Praktikum (Statusleiste) | `jarvis_applications`: „PRAKTIKUM · NOCH KEINE ZUSAGE“ (rot) bis Status `zusage`; Wochenziel 3 Bewerbungen (Zählung: Wechsel auf `gesendet` in der laufenden Woche) |
 
 ## 6. Hintergrund-Gehirn (geplante Aufgabe)
 
@@ -94,8 +95,9 @@ Alle neuen Tabellen: RLS aktiv, Policy „nur angemeldet“ (wie bei Coach).
 2. Relevante Mails → `jarvis_mails` (Upsert per Message-ID) mit Kategorie, Priorität (hoch = Antwort erwartet oder Frist), Zusammenfassung.
 3. Fristen mit Handlungsbedarf → `jarvis_tasks` (`source = jarvis`, Verweis auf Mail).
 4. Bewerbungen: eindeutige Fälle automatisch (Einladung → `gespraech`, Absage → `absage`, Eingangsbestätigung → `in_pruefung`); unklare Fälle nur als Log-Eintrag mit Status `pruefen`.
-5. Briefing (3–5 Sätze, Butler-Ton, Anrede „Master Leon“) → `jarvis_briefings`. Inhalt: Neues, Dringendes heute, Training/Ernährung des Tages.
-6. Jeder Schritt → `jarvis_log`.
+5. Nachfassen: Bewerbungen seit ≥ 10 Tagen auf `gesendet` ohne neue Mail → Task „<Firma> nachfassen“ (nur einmal je Bewerbung).
+6. Briefing (3–5 Sätze, Butler-Ton, Anrede „Master Leon“) → `jarvis_briefings`. Inhalt: Neues, Dringendes heute, Stand Mission Praktikum inkl. Wochenziel und nächstem Schritt, Training/Ernährung des Tages. Ab 1. Dezember ohne Zusage: deutlich dringlicherer Ton.
+7. Jeder Schritt → `jarvis_log`.
 
 **Datenschutz:** In der Datenbank landen nur Zusammenfassungen. Gemini erhält nie Mail-Volltexte.
 
@@ -147,7 +149,8 @@ Alle neuen Tabellen: RLS aktiv, Policy „nur angemeldet“ (wie bei Coach).
 Jede Etappe ist für sich nutzbar und wird vor der nächsten von Leon geprüft.
 
 ## 11. Offene Punkte / Annahmen
-- **Praktikumsstart** für den Countdown: angenommen 01.03.2027 – von Leon zu bestätigen.
+- **Praktikum:** Wochenziel 3 und Wunschstart März 2027 von Claude gesetzt (Leon hat keine Zahl genannt) – jederzeit änderbar.
+- **Gemini-Schlüssel:** muss Leon selbst in Google AI Studio erstellen (Kontoerstellung kann Claude nicht übernehmen).
 - **Gemini-Gratis-Stufe:** genaue Limits und Datennutzung vor Etappe 3 bei Google prüfen.
 - **„Automatisch genehmigen“** für geplante Aufgaben: Verfügbarkeit erst beim Einrichten sichtbar.
 - **iPhone-Spracherkennung:** Zuverlässigkeit im Homescreen-Modus unbekannt – wird zuerst getestet.
