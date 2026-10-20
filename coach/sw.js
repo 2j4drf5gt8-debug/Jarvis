@@ -1,7 +1,7 @@
 const CACHE="coach-v25";
 const ASSETS=["./","index.html","app.js","config.js","supabase.js","manifest.webmanifest","icon-180.png","icon-192.png","icon-512.png","jv-body.webp","jv-wl.webp","jv-wr.webp"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));self.skipWaiting();});
-self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE&&(x.startsWith("coach-")||/^jarvis-v\d{2,}$/.test(x))).map(x=>caches.delete(x)))));self.clients.claim();});
+self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE&&x.startsWith("coach-")).map(x=>caches.delete(x)))));self.clients.claim();});
 self.addEventListener("fetch",e=>{
   const u=new URL(e.request.url);
   if(e.request.method!=="GET"||u.origin!==location.origin) return;
