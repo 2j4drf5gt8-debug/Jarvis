@@ -57,6 +57,7 @@ const sorted = () => [...days.values()].sort((a,b)=>a.date<b.date?-1:1);
 /* Vitamine: Referenzwerte DGE/ÖGE 2024 für Männer (Altersgruppe 25–<51; B6 laut DGE 1,6 mg für erwachsene Männer).
    Datenformat: meal.vit / item.vit / per100.vit = {a:µg,d:µg,e:mg,c:mg,b1:mg,b2:mg,b6:mg,b12:µg,fol:µg} – fehlender Schlüssel = unbekannt */
 const VITS=[["a","Vitamin A","µg",850],["d","Vitamin D","µg",20],["e","Vitamin E","mg",14],["c","Vitamin C","mg",110],["b1","Vitamin B1","mg",1.2],["b2","Vitamin B2","mg",1.4],["b6","Vitamin B6","mg",1.6],["b12","Vitamin B12","µg",4],["fol","Folat","µg",300]];
+const VIT_FOCUS=["d","c","fol","b12"];
 const VIT_DEFAULT=Object.fromEntries(VITS.map(v=>[v[0],v[3]]));
 const vitTarget=k=>{ const t=settings.vitTargets?.[k]; return t==null?VIT_DEFAULT[k]:+t||0; };
 const hasVit=v=>v&&typeof v==="object"&&Object.keys(v).some(k=>v[k]!=null&&!isNaN(+v[k]));
@@ -215,17 +216,21 @@ function render(){
   if(tab==="koerper") loadPhotos();
 }
 
+let vitAll=(()=>{ try{ return localStorage.getItem("jv-vitall")==="1"; }catch(e){ return false; } })();
+document.addEventListener("click",e=>{ if(e.target.closest('[data-act="vitall"]')){ vitAll=!vitAll; try{ localStorage.setItem("jv-vitall",vitAll?"1":"0"); }catch(_){} render(); } },true);
 let vitOpen=(()=>{ try{ return localStorage.getItem("jv-vitopen")==="1"; }catch(e){ return false; } })();
 document.addEventListener("toggle",e=>{ if(e.target.classList?.contains("vitbox")){ vitOpen=e.target.open; try{ localStorage.setItem("jv-vitopen",vitOpen?"1":"0"); }catch(_){} } },true);
 function vitCard(d){
   const t=vitTotals(d), all=d.meals.length, known=d.meals.filter(m=>hasVit(mealVit(m))).length;
   const fmt=x=>x===0?"0":de(x,x<1?2:x<10?1:0);
-  const rows=VITS.map(([k,l,u])=>{ const tg=vitTarget(k), v=t[k]||0, has=t[k]!=null, p=tg?Math.min(1,v/tg):0, pc=tg?Math.round(v/tg*100):0;
+  const focus=settings.vitFocus?.length?settings.vitFocus:VIT_FOCUS, list=vitAll?VITS:VITS.filter(([k])=>focus.includes(k));
+  const rows=list.map(([k,l,u])=>{ const tg=vitTarget(k), v=t[k]||0, has=t[k]!=null, p=tg?Math.min(1,v/tg):0, pc=tg?Math.round(v/tg*100):0;
     return `<div class="vit"><div class="row between"><span>${l.replace("Vitamin ","Vit. ")}</span><span class="num">${has?`<b>${fmt(v)}</b>`:"–"}${tg?` / ${de(tg)} ${u}`:` ${u}`}</span></div>
       ${tg?`<div class="prog vitbar${pc>=100?" full":""}"><i style="width:${p*100}%"></i></div>`:""}</div>`; }).join("");
-  const reached=VITS.filter(([k])=>vitTarget(k)&&(t[k]||0)>=vitTarget(k)).length, withT=VITS.filter(([k])=>vitTarget(k)).length;
+  const reached=list.filter(([k])=>vitTarget(k)&&(t[k]||0)>=vitTarget(k)).length, withT=list.filter(([k])=>vitTarget(k)).length;
   return `<section class="card"><details class="vitbox"${vitOpen?" open":""}><summary class="row between"><h2>Vitamine</h2><span class="hint">${known?`${reached} von ${withT} Zielen erreicht`:"noch keine Angaben"} <span class="chev">▾</span></span></summary>
     <div class="vitgrid">${rows}</div>
+    <button class="btn ghost sm" data-act="vitall" style="margin:2px 0 6px">${vitAll?"Nur die wichtigsten zeigen":`Alle ${VITS.length} Vitamine zeigen`}</button>
     ${all&&known<all?`<p class="hint">Bei ${all-known} von ${all} Mahlzeiten fehlen Vitaminangaben – die Werte oben sind deshalb zu niedrig.</p>`:""}
     <p class="hint">Ziele: DGE/ÖGE-Referenzwerte für Männer, in den Einstellungen änderbar. Vitamin D bildet der Körper zusätzlich über Sonnenlicht.</p></details></section>`;
 }
