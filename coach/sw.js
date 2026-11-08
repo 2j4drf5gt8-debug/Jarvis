@@ -1,5 +1,5 @@
-const CACHE="coach-v30";
-const ASSETS=["./","index.html","app.js","config.js","supabase.js","manifest.webmanifest","icon-180.png","icon-192.png","icon-512.png"];
+const CACHE="coach-v31";
+const ASSETS=["./","index.html","app.js","config.js","supabase.js","manifest.webmanifest","icon-180.png","icon-192.png","icon-512.png","bg.jpg"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));self.skipWaiting();});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE&&x.startsWith("coach-")).map(x=>caches.delete(x)))));self.clients.claim();});
 self.addEventListener("fetch",e=>{
