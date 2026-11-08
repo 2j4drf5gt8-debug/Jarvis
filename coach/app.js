@@ -205,10 +205,6 @@ function viewHeute(){
   const d=getDay(cur), t=totals(d), due=nextDue(), pt=+settings.proteinTarget||0;
   const pct=pt?Math.min(1,t.protein/pt):0, C=2*Math.PI*50;
   const ek={c:t.carbs*4,p:t.protein*4,f:t.fat*9}, es=ek.c+ek.p+ek.f||1;
-  const recent=[]; const seen=new Set();
-  sorted().reverse().forEach(day=>(day.meals||[]).forEach(m=>{ if(!seen.has(m.name)&&recent.length<8){seen.add(m.name);recent.push(m);} }));
-  const favs=settings.favorites||[];
-  const quick=[...favs.map(f=>({...f,fav:true})),...recent.filter(m=>!favs.some(f=>f.name===m.name))].slice(0,10);
   const wk=[...Array(7)].map((_,i)=>{const ds=shift(TODAY(),i-6);return{ds,l:new Date(ds+"T12:00:00").toLocaleDateString("de-DE",{weekday:"short"}).slice(0,2),v:totals(days.get(ds)||emptyDay(ds)).kcal,hl:ds===cur};});
   return `
   ${cur===TODAY()?`<section class="card hero">
@@ -250,10 +246,9 @@ function viewHeute(){
 
   <section class="card">
     <div class="row between"><h2>Essen</h2><div class="row" style="gap:6px"><button class="btn sm" data-act="addfood">${ICON.plus}</button>${settings.aiPhoto?`<button class="btn pri sm" data-act="photofood">${ICON.camera}Foto</button>`:`<a class="btn pri sm" href="https://claude.ai/artifact/VZ8JNe1oJvXiYRyhixfAWD" target="_blank" rel="noopener">${ICON.camera}Foto</a>`}</div></div>
-    ${quick.length?`<div><div class="lbl" style="margin-bottom:8px">Mit einem Tipp</div><div class="pills">${quick.map((m,i)=>`<button class="pill" data-quick="${i}">${m.fav?'<b style="color:var(--accent)">★</b>':""}<span class="nm">${esc(m.name.replace(/ \(.*?\)/g,""))}</span><span>${r(m.kcal)}</span></button>`).join("")}</div></div>`:""}
     <div>${d.meals.length?d.meals.map((m,i)=>`<div class="meal"><div class="nm" data-edit-meal="${i}" role="button" tabindex="0" aria-label="Mahlzeit bearbeiten"><div>${esc(m.name)}</div><div class="mm">${m.time?esc(m.time)+" · ":""}KH ${r(m.carbs)} · E ${r(m.protein)} · <span style="white-space:nowrap">F ${r(m.fat)}${m.fiber!=null?` · Bst ${de(m.fiber)}`:""} <span class="edh">✎</span></span></div></div>
       <span class="kc">${r(m.kcal)}</span><button class="x" data-fav="${i}" aria-label="Als Favorit speichern" title="Favorit" style="color:${(settings.favorites||[]).some(f=>f.name===m.name)?"var(--pr)":"var(--muted)"}">★</button><button class="x" data-del-meal="${i}" aria-label="Löschen">×</button></div>`).join("")
-      :`<p class="empty">Noch nichts eingetragen. Tipp oben auf einen Favoriten, scanne einen Barcode oder schreib Claude, was du gegessen hast.</p>`}</div>
+      :`<p class="empty">Noch nichts eingetragen. Schreib Claude, was du gegessen hast, oder scanne einen Barcode.</p>`}</div>
   </section>
 
   <section class="card" style="padding:12px 14px">
