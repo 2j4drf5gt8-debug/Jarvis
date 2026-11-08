@@ -5,7 +5,7 @@ const $ = id => document.getElementById(id);
 const VERSION = 4;
 const DEFAULT_SETTINGS = {
   supplements:["Kreatin (5 g)"], cycle:["U1","U2","Pause"], restSeconds:150,
-  proteinTarget:160, favorites:[], plan:{U1:[],U2:[]},
+  proteinTarget:160, fiberTarget:30, favorites:[], plan:{U1:[],U2:[]},
   reminders:{kreatin:{on:true,time:"21:00"},training:{on:true,time:"17:00"}},
   goalDate:"2027-01-31", goalLabel:"Ende des Auslandssemesters", playlistUrl:"", soundcloudUrl:"", autoMusic:"soundcloud", startSound:true
 };
@@ -54,7 +54,7 @@ const getDay = date => { const d=structuredClone(days.get(date)||emptyDay(date))
 const saveDay = d => { days.set(d.date,d); render(); return write("days/"+d.date,d); };
 const saveSettings = s => { settings=s; render(); return write("settings/main",s); };
 const sorted = () => [...days.values()].sort((a,b)=>a.date<b.date?-1:1);
-const totals = d => (d.meals||[]).reduce((a,m)=>({kcal:a.kcal+(+m.kcal||0),carbs:a.carbs+(+m.carbs||0),protein:a.protein+(+m.protein||0),fat:a.fat+(+m.fat||0)}),{kcal:0,carbs:0,protein:0,fat:0});
+const totals = d => (d.meals||[]).reduce((a,m)=>({kcal:a.kcal+(+m.kcal||0),carbs:a.carbs+(+m.carbs||0),protein:a.protein+(+m.protein||0),fat:a.fat+(+m.fat||0),fiber:a.fiber+(+m.fiber||0)}),{kcal:0,carbs:0,protein:0,fat:0,fiber:0});
 
 /* ---------------- ui helpers ---------------- */
 let toastT=null;
@@ -241,12 +241,17 @@ function viewHeute(){
       </div>
     </div>
     ${pt?`<p class="hint">${t.protein>=pt?"Eiweißziel erreicht.":`Noch ${r(pt-t.protein)} g Eiweiß bis zum Ziel.`}</p>`:""}
+    ${(()=>{ const ft=+settings.fiberTarget||0, fp=ft?Math.min(1,t.fiber/ft):0, known=d.meals.filter(m=>m.fiber!=null).length, all=d.meals.length;
+      return `<div class="fib"><div class="row between"><span class="lbl">Ballaststoffe</span><span class="num"><b>${de(t.fiber)}</b>${ft?` / ${ft} g`:" g"}</span></div>
+        ${ft?`<div class="prog fibbar"><i style="width:${fp*100}%"></i></div>`:""}
+        ${ft?`<p class="hint">${t.fiber>=ft?"Ballaststoffziel erreicht.":`Noch ${de(ft-t.fiber)} g bis zum Ziel.`}</p>`:""}
+        ${all&&known<all?`<p class="hint">Bei ${all-known} von ${all} Mahlzeiten fehlen Ballaststoff-Angaben – tippe sie an, um sie zu ergänzen.</p>`:""}</div>`; })()}
   </section>
 
   <section class="card">
     <div class="row between"><h2>Essen</h2><div class="row" style="gap:6px"><button class="btn sm" data-act="addfood">${ICON.plus}</button>${settings.aiPhoto?`<button class="btn pri sm" data-act="photofood">${ICON.camera}Foto</button>`:`<a class="btn pri sm" href="https://claude.ai/artifact/VZ8JNe1oJvXiYRyhixfAWD" target="_blank" rel="noopener">${ICON.camera}Foto</a>`}</div></div>
     ${quick.length?`<div><div class="lbl" style="margin-bottom:8px">Mit einem Tipp</div><div class="pills">${quick.map((m,i)=>`<button class="pill" data-quick="${i}">${m.fav?'<b style="color:var(--accent)">★</b>':""}<span class="nm">${esc(m.name.replace(/ \(.*?\)/g,""))}</span><span>${r(m.kcal)}</span></button>`).join("")}</div></div>`:""}
-    <div>${d.meals.length?d.meals.map((m,i)=>`<div class="meal"><div class="nm" data-edit-meal="${i}" role="button" tabindex="0" aria-label="Mahlzeit bearbeiten"><div>${esc(m.name)}</div><div class="mm">${m.time?esc(m.time)+" · ":""}KH ${r(m.carbs)} · E ${r(m.protein)} · <span style="white-space:nowrap">F ${r(m.fat)} <span class="edh">✎</span></span></div></div>
+    <div>${d.meals.length?d.meals.map((m,i)=>`<div class="meal"><div class="nm" data-edit-meal="${i}" role="button" tabindex="0" aria-label="Mahlzeit bearbeiten"><div>${esc(m.name)}</div><div class="mm">${m.time?esc(m.time)+" · ":""}KH ${r(m.carbs)} · E ${r(m.protein)} · <span style="white-space:nowrap">F ${r(m.fat)}${m.fiber!=null?` · Bst ${de(m.fiber)}`:""} <span class="edh">✎</span></span></div></div>
       <span class="kc">${r(m.kcal)}</span><button class="x" data-fav="${i}" aria-label="Als Favorit speichern" title="Favorit" style="color:${(settings.favorites||[]).some(f=>f.name===m.name)?"var(--pr)":"var(--muted)"}">★</button><button class="x" data-del-meal="${i}" aria-label="Löschen">×</button></div>`).join("")
       :`<p class="empty">Noch nichts eingetragen. Tipp oben auf einen Favoriten, scanne einen Barcode oder schreib Claude, was du gegessen hast.</p>`}</div>
   </section>
@@ -525,9 +530,9 @@ let scanStream=null, scanReader=null;
 function stopScan(){ try{scanReader&&scanReader.reset();}catch(e){} scanReader=null; if(scanStream){scanStream.getTracks().forEach(t=>t.stop()); scanStream=null;} }
 const rd1=v=>Math.round((+v||0)*10)/10;
 function addMeal(m){ const d=getDay(cur);
-  const e={name:m.name,kcal:r(m.kcal),carbs:rd1(m.carbs),protein:rd1(m.protein),fat:rd1(m.fat),time:nowTime()};
+  const e={name:m.name,kcal:r(m.kcal),carbs:rd1(m.carbs),protein:rd1(m.protein),fat:rd1(m.fat),time:nowTime()}; if(m.fiber!=null&&!isNaN(+m.fiber)) e.fiber=rd1(m.fiber);
   if(m.per100) e.per100=m.per100; if(m.grams) e.grams=r(m.grams); if(m.base) e.base=m.base;
-  if(m.items?.length) e.items=m.items.map(i=>({name:i.name,grams:r(i.grams),kcal:r(i.kcal),carbs:rd1(i.carbs),protein:rd1(i.protein),fat:rd1(i.fat)}));
+  if(m.items?.length) e.items=m.items.map(i=>({name:i.name,grams:r(i.grams),kcal:r(i.kcal),carbs:rd1(i.carbs),protein:rd1(i.protein),fat:rd1(i.fat),...(i.fiber!=null?{fiber:rd1(i.fiber)}:{})}));
   d.meals.push(e); saveDay(d); toast(`${m.name.slice(0,40)} eingetragen`); }
 /* Grundnahrungsmittel: Durchschnittswerte pro 100 g (Richtwerte, v. a. nach USDA/üblichen Packungsangaben) */
 const BASICS=[
@@ -584,8 +589,8 @@ async function searchProducts(q){
 }
 function offToItem(p){ const n=p.nutriments||{}; if(n["energy-kcal_100g"]==null) return null;
   return {code:p.code,name:p.product_name_de||p.product_name||p.product_name_es||"Produkt",brand:String(p.brands||"").split(",")[0].trim(),
-    kcal:+n["energy-kcal_100g"]||0,carbs:+n.carbohydrates_100g||0,protein:+n.proteins_100g||0,fat:+n.fat_100g||0,serving_g:+p.serving_quantity||null,serving:p.serving_size||""}; }
-const itemToFood=it=>({name:[it.name,it.brand?`(${it.brand})`:""].join(" ").trim(),per100:{kcal:it.kcal,carbs:it.carbs,protein:it.protein,fat:it.fat},serving_g:it.serving_g,serving:it.serving});
+    kcal:+n["energy-kcal_100g"]||0,carbs:+n.carbohydrates_100g||0,protein:+n.proteins_100g||0,fat:+n.fat_100g||0,fiber:n.fiber_100g!=null?+n.fiber_100g:null,serving_g:+p.serving_quantity||null,serving:p.serving_size||""}; }
+const itemToFood=it=>({name:[it.name,it.brand?`(${it.brand})`:""].join(" ").trim(),per100:{kcal:it.kcal,carbs:it.carbs,protein:it.protein,fat:it.fat,...(it.fiber!=null?{fiber:it.fiber}:{})},serving_g:it.serving_g,serving:it.serving});
 function searchMode(body){
   body.innerHTML=`<form class="row" id="sform"><input class="field" id="sq" type="search" enterkeyhint="search" placeholder="z. B. Skyr, Hähnchenbrust, avena" autocomplete="off"><button class="btn pri" type="submit">Suchen</button></form><div id="sres"></div>`;
   const res=body.querySelector("#sres"), inp=body.querySelector("#sq");
@@ -646,10 +651,10 @@ function foodSheet(mode="foto"){
       }
       if(mode==="manuell"){
         body.innerHTML=`<form id="mform" style="display:flex;flex-direction:column;gap:8px"><input class="field" id="m-name" placeholder="Name, z. B. Hähnchen mit Reis" required>
-          <div class="grid4"><input class="field num" id="m-kcal" type="number" inputmode="decimal" placeholder="kcal" required><input class="field num" id="m-c" type="number" inputmode="decimal" placeholder="KH g"><input class="field num" id="m-p" type="number" inputmode="decimal" placeholder="Eiw. g"><input class="field num" id="m-f" type="number" inputmode="decimal" placeholder="Fett g"></div>
+          <div class="grid4"><input class="field num" id="m-kcal" type="number" inputmode="decimal" placeholder="kcal" required><input class="field num" id="m-c" type="number" inputmode="decimal" placeholder="KH g"><input class="field num" id="m-p" type="number" inputmode="decimal" placeholder="Eiw. g"><input class="field num" id="m-f" type="number" inputmode="decimal" placeholder="Fett g"></div><input class="field num" id="m-fib" type="number" inputmode="decimal" placeholder="Ballaststoffe g (optional)">
           <label class="row"><input type="checkbox" id="m-fav"> <span>Als Favorit speichern</span></label>
           <button class="btn pri block" type="submit">Eintragen</button></form>`;
-        body.querySelector("#mform").onsubmit=e=>{ e.preventDefault(); const m={name:$("m-name").value.trim(),kcal:+$("m-kcal").value||0,carbs:+$("m-c").value||0,protein:+$("m-p").value||0,fat:+$("m-f").value||0};
+        body.querySelector("#mform").onsubmit=e=>{ e.preventDefault(); const m={name:$("m-name").value.trim(),kcal:+$("m-kcal").value||0,carbs:+$("m-c").value||0,protein:+$("m-p").value||0,fat:+$("m-f").value||0}; if($("m-fib").value!=="") m.fiber=+$("m-fib").value||0;
           if($("m-fav").checked){ const s=structuredClone(settings); s.favorites=[...(s.favorites||[]),m]; saveSettings(s); }
           addMeal(m); closeSheet(); };
       }
@@ -724,14 +729,14 @@ function portionSheet(food){
   const presets=[...(food.serving_g?[[food.serving_g,`1 Portion (${r(food.serving_g)} g)`]]:[]),...[30,50,100,150,200,250].map(g=>[g,`${g} g`])];
   openSheet(`<div class="row between"><h2>Menge</h2><button class="x" data-close>×</button></div>
     <div style="font-weight:600">${esc(food.name)}</div>
-    <p class="hint num">pro 100 g: ${r(food.per100.kcal)} kcal · KH ${de(food.per100.carbs)} · E ${de(food.per100.protein)} · F ${de(food.per100.fat)}${food.basic?" · Durchschnittswert":""}</p>
+    <p class="hint num">pro 100 g: ${r(food.per100.kcal)} kcal · KH ${de(food.per100.carbs)} · E ${de(food.per100.protein)} · F ${de(food.per100.fat)}${food.per100.fiber!=null?` · Ballastst. ${de(food.per100.fiber)}`:""}${food.basic?" · Durchschnittswert":""}</p>
     <div class="row"><input class="field num" id="grams" type="number" inputmode="decimal" value="${r(g0)}" style="font-size:1.3rem"><span class="muted">g</span></div>
     <div class="row wrapf">${presets.map(([g,l])=>`<button class="btn sm" data-g="${g}">${esc(l)}</button>`).join("")}</div>
     <div class="stat" id="psum"></div>
     <label class="row"><input type="checkbox" id="p-fav"> <span>Diese Portion als Favorit speichern</span></label>
     <button class="btn pri block" id="padd">Eintragen</button>`, sh=>{
-      const calc=()=>{ const g=+sh.querySelector("#grams").value||0, f=g/100; return {name:`${food.name}, ${r(g)} g`,base:food.name,grams:g,per100:food.per100,kcal:food.per100.kcal*f,carbs:food.per100.carbs*f,protein:food.per100.protein*f,fat:food.per100.fat*f}; };
-      const paint=()=>{ const m=calc(); sh.querySelector("#psum").innerHTML=`<span class="lbl">Ergibt</span><b class="num">${r(m.kcal)} kcal</b><span class="d muted">KH ${de(m.carbs)} g · E ${de(m.protein)} g · F ${de(m.fat)} g</span>`; };
+      const calc=()=>{ const g=+sh.querySelector("#grams").value||0, f=g/100; return {name:`${food.name}, ${r(g)} g`,base:food.name,grams:g,per100:food.per100,kcal:food.per100.kcal*f,carbs:food.per100.carbs*f,protein:food.per100.protein*f,fat:food.per100.fat*f,...(food.per100.fiber!=null?{fiber:food.per100.fiber*f}:{})}; };
+      const paint=()=>{ const m=calc(); sh.querySelector("#psum").innerHTML=`<span class="lbl">Ergibt</span><b class="num">${r(m.kcal)} kcal</b><span class="d muted">KH ${de(m.carbs)} g · E ${de(m.protein)} g · F ${de(m.fat)} g${m.fiber!=null?` · Ballastst. ${de(m.fiber)} g`:""}</span>`; };
       sh.querySelector("#grams").oninput=paint; paint();
       sh.addEventListener("click",e=>{ if(e.target.closest("[data-close]")) closeSheet(); const g=e.target.closest("[data-g]"); if(g){ sh.querySelector("#grams").value=g.dataset.g; paint(); } });
       sh.querySelector("#padd").onclick=()=>{ const m=calc(); if(sh.querySelector("#p-fav").checked){ const s=structuredClone(settings); s.favorites=[...(s.favorites||[]),{...m,kcal:r(m.kcal)}]; saveSettings(s);} addMeal(m); closeSheet(); };
@@ -743,7 +748,7 @@ function mealSheet(idx){
   const m=structuredClone(orig);
   const items=(m.items||[]).map(i=>({...i,b:{...i}}));
   const hasItems=items.length>0, hasPer100=!hasItems&&m.per100&&m.grams;
-  const sumItems=()=>items.reduce((a,i)=>({kcal:a.kcal+i.kcal,carbs:a.carbs+i.carbs,protein:a.protein+i.protein,fat:a.fat+i.fat}),{kcal:0,carbs:0,protein:0,fat:0});
+  const sumItems=()=>{ const t=items.reduce((a,i)=>({kcal:a.kcal+i.kcal,carbs:a.carbs+i.carbs,protein:a.protein+i.protein,fat:a.fat+i.fat,fiber:a.fiber+(+i.fiber||0)}),{kcal:0,carbs:0,protein:0,fat:0,fiber:0}); if(!items.some(i=>i.fiber!=null)) t.fiber=null; return t; };
   openSheet(`<div class="row between"><h2>Mahlzeit bearbeiten</h2><button class="x" data-close>×</button></div>
     <div class="row"><input class="field" id="e-name" value="${esc(m.name)}" style="flex:1"><input class="field num" id="e-time" type="time" value="${esc(m.time||"")}" style="width:110px;flex:none"></div>
     ${hasItems?`<div class="lbl" style="margin-top:4px">Bestandteile – Gramm ändern rechnet automatisch um</div><div id="e-items"></div>`:""}
@@ -751,22 +756,22 @@ function mealSheet(idx){
     <div class="lbl" style="margin-top:4px">Portion anpassen</div>
     <div class="row wrapf">${[[0.5,"½"],[0.75,"¾"],[1.25,"1¼"],[1.5,"1½"],[2,"2×"]].map(([f,l])=>`<button class="btn sm" data-mul="${f}">${l}</button>`).join("")}</div>
     <div class="lbl" style="margin-top:4px">Nährwerte</div>
-    <div class="grid4"><label class="nf"><span>kcal</span><input class="field num" id="e-kcal" type="number" inputmode="decimal"></label><label class="nf"><span>KH g</span><input class="field num" id="e-c" type="number" inputmode="decimal"></label><label class="nf"><span>Eiw. g</span><input class="field num" id="e-p" type="number" inputmode="decimal"></label><label class="nf"><span>Fett g</span><input class="field num" id="e-f" type="number" inputmode="decimal"></label></div>
+    <div class="grid4"><label class="nf"><span>kcal</span><input class="field num" id="e-kcal" type="number" inputmode="decimal"></label><label class="nf"><span>KH g</span><input class="field num" id="e-c" type="number" inputmode="decimal"></label><label class="nf"><span>Eiw. g</span><input class="field num" id="e-p" type="number" inputmode="decimal"></label><label class="nf"><span>Fett g</span><input class="field num" id="e-f" type="number" inputmode="decimal"></label></div><label class="nf"><span>Ballaststoffe g</span><input class="field num" id="e-fib" type="number" inputmode="decimal" placeholder="–"></label>
     <p class="hint" id="e-check"></p>
     <button class="btn pri block" id="e-save">Speichern</button>
     <div class="row"><button class="btn" id="e-dup" style="flex:1">Nochmal eintragen</button><button class="btn" id="e-del" style="flex:1;color:var(--warn)">Löschen</button></div>`, sh=>{
       const $e=id=>sh.querySelector("#"+id);
-      const setVals=v=>{ $e("e-kcal").value=r(v.kcal); $e("e-c").value=rd1(v.carbs); $e("e-p").value=rd1(v.protein); $e("e-f").value=rd1(v.fat); check(); };
-      const vals=()=>({kcal:+$e("e-kcal").value||0,carbs:+$e("e-c").value||0,protein:+$e("e-p").value||0,fat:+$e("e-f").value||0});
+      const setVals=v=>{ $e("e-kcal").value=r(v.kcal); $e("e-c").value=rd1(v.carbs); $e("e-p").value=rd1(v.protein); $e("e-f").value=rd1(v.fat); $e("e-fib").value=v.fiber!=null&&!isNaN(v.fiber)?rd1(v.fiber):""; check(); };
+      const vals=()=>({kcal:+$e("e-kcal").value||0,carbs:+$e("e-c").value||0,protein:+$e("e-p").value||0,fat:+$e("e-f").value||0,fiber:$e("e-fib").value===""?null:(+$e("e-fib").value||0)});
       const check=()=>{ const v=vals(), calc=v.carbs*4+v.protein*4+v.fat*9; const off=v.kcal&&Math.abs(calc-v.kcal)/v.kcal>0.2;
         $e("e-check").textContent=off?`Hinweis: Aus den Makros ergeben sich ca. ${r(calc)} kcal – passt das?`:""; };
       const paintItems=()=>{ if(!hasItems) return;
         $e("e-items").innerHTML=items.map((i,k)=>`<div class="ai-item"><div style="min-width:0"><div style="font-weight:600">${esc(i.name)}</div><div class="mm">${r(i.kcal)} kcal · KH ${r(i.carbs)} · E ${r(i.protein)} · F ${r(i.fat)}</div></div>
           <div class="row" style="gap:4px"><input class="field num" data-ig="${k}" type="number" inputmode="decimal" value="${r(i.grams)}"><span class="muted">g</span></div><button class="x" data-irm="${k}" aria-label="Bestandteil entfernen">×</button></div>`).join("")||'<p class="hint">Keine Bestandteile mehr.</p>'; };
-      const scaleItem=(i,g)=>{ const f=i.b.grams?g/i.b.grams:0; Object.assign(i,{grams:g,kcal:i.b.kcal*f,carbs:i.b.carbs*f,protein:i.b.protein*f,fat:i.b.fat*f}); };
+      const scaleItem=(i,g)=>{ const f=i.b.grams?g/i.b.grams:0; Object.assign(i,{grams:g,kcal:i.b.kcal*f,carbs:i.b.carbs*f,protein:i.b.protein*f,fat:i.b.fat*f,...(i.b.fiber!=null?{fiber:i.b.fiber*f}:{})}); };
       paintItems(); setVals(m);
       ["e-kcal","e-c","e-p","e-f"].forEach(id=>$e(id).oninput=check);
-      if(hasPer100) $e("e-grams").oninput=()=>{ const f=(+$e("e-grams").value||0)/100; setVals({kcal:m.per100.kcal*f,carbs:m.per100.carbs*f,protein:m.per100.protein*f,fat:m.per100.fat*f}); };
+      if(hasPer100) $e("e-grams").oninput=()=>{ const f=(+$e("e-grams").value||0)/100; setVals({kcal:m.per100.kcal*f,carbs:m.per100.carbs*f,protein:m.per100.protein*f,fat:m.per100.fat*f,fiber:m.per100.fiber!=null?m.per100.fiber*f:vals().fiber}); };
       sh.addEventListener("input",e=>{ const ig=e.target.closest("[data-ig]"); if(ig){ scaleItem(items[+ig.dataset.ig],+ig.value||0); const ae=document.activeElement; paintItems(); setVals(sumItems()); const n=sh.querySelector(`[data-ig="${ig.dataset.ig}"]`); if(ae===ig&&n){ n.focus(); try{n.setSelectionRange(n.value.length,n.value.length);}catch(_){} } } });
       sh.addEventListener("click",e=>{
         if(e.target.closest("[data-close]")) return closeSheet();
@@ -774,12 +779,12 @@ function mealSheet(idx){
         const mu=e.target.closest("[data-mul]"); if(mu){ const f=+mu.dataset.mul;
           if(hasItems){ items.forEach(i=>scaleItem(i,i.grams*f)); paintItems(); setVals(sumItems()); }
           else if(hasPer100){ $e("e-grams").value=r((+$e("e-grams").value||0)*f); $e("e-grams").oninput(); }
-          else { const v=vals(); setVals({kcal:v.kcal*f,carbs:v.carbs*f,protein:v.protein*f,fat:v.fat*f}); }
+          else { const v=vals(); setVals({kcal:v.kcal*f,carbs:v.carbs*f,protein:v.protein*f,fat:v.fat*f,fiber:v.fiber!=null?v.fiber*f:null}); }
           toast(`Portion ${mu.textContent}`); } });
       const build=()=>{ const v=vals(); let name=$e("e-name").value.trim()||"Mahlzeit";
-        const out={...orig,name,time:$e("e-time").value||orig.time||"",kcal:r(v.kcal),carbs:rd1(v.carbs),protein:rd1(v.protein),fat:rd1(v.fat)};
+        const out={...orig,name,time:$e("e-time").value||orig.time||"",kcal:r(v.kcal),carbs:rd1(v.carbs),protein:rd1(v.protein),fat:rd1(v.fat)}; if(v.fiber!=null) out.fiber=rd1(v.fiber); else delete out.fiber;
         if(hasPer100){ const g=+$e("e-grams").value||0; out.grams=r(g); if(name===orig.name&&orig.base) out.name=`${orig.base}, ${r(g)} g`; }
-        if(hasItems) out.items=items.map(({b,...i})=>({...i,grams:r(i.grams),kcal:r(i.kcal),carbs:rd1(i.carbs),protein:rd1(i.protein),fat:rd1(i.fat)}));
+        if(hasItems) out.items=items.map(({b,...i})=>({...i,grams:r(i.grams),kcal:r(i.kcal),carbs:rd1(i.carbs),protein:rd1(i.protein),fat:rd1(i.fat),...(i.fiber!=null?{fiber:rd1(i.fiber)}:{})}));
         return out; };
       $e("e-save").onclick=()=>{ const dd=getDay(cur); dd.meals[idx]=build(); saveDay(dd); closeSheet(); toast("Gespeichert"); };
       $e("e-dup").onclick=()=>{ const n=build(); delete n.time; addMeal(n); closeSheet(); };
@@ -818,6 +823,7 @@ function settingsSheet(){
       <button class="x" data-delex="${u}-${i}" aria-label="Übung entfernen">×</button></div>`).join("");
   openSheet(`<div class="row between"><h2>Einstellungen</h2><button class="x" data-close>×</button></div>
     <div class="card"><h3>Eiweißziel</h3><div class="row"><input class="field num" id="st-prot" type="number" inputmode="numeric" value="${s.proteinTarget||""}" placeholder="aus"><span class="muted">g pro Tag</span></div><p class="hint">Leer lassen, um den Ring auszublenden.</p></div>
+    <div class="card"><h3>Ballaststoffziel</h3><div class="row"><input class="field num" id="st-fib" type="number" inputmode="numeric" value="${s.fiberTarget??30}" placeholder="aus"><span class="muted">g pro Tag</span></div><p class="hint">Die DGE empfiehlt Erwachsenen mindestens 30 g pro Tag. Leer lassen, um den Balken auszublenden.</p></div>
     <div class="card"><h3>Ernährungs-Schnitt</h3><label class="lbl" for="st-ts">Zählt ab</label><input class="field num" id="st-ts" type="date" value="${s.trackStart||"2026-10-19"}"><p class="hint">Durchschnitte nutzen nur abgeschlossene Tage ab diesem Datum. Der laufende Tag zählt erst ab morgen mit.</p></div>
     <div class="card"><h3>Ziel-Countdown</h3><div class="grid2"><div><label class="lbl" for="st-gd">Datum</label><input class="field num" id="st-gd" type="date" value="${s.goalDate||"2027-01-31"}"></div><div><label class="lbl" for="st-gl">Bezeichnung</label><input class="field" id="st-gl" value="${esc(s.goalLabel||"")}" placeholder="z. B. Ende Auslandssemester"></div></div></div>
     <div class="card"><h3>Musik</h3>
@@ -848,7 +854,7 @@ function settingsSheet(){
       sh.querySelector("#st-logout").onclick=async()=>{ await sb?.auth.signOut(); session=null; closeSheet(); $("login").hidden=false; };
       sh.querySelector("#st-save").onclick=()=>{
         const n=structuredClone(settings);
-        n.proteinTarget = +sh.querySelector("#st-prot").value || 0;
+        n.proteinTarget = +sh.querySelector("#st-prot").value || 0; n.fiberTarget = +sh.querySelector("#st-fib").value || 0;
         n.reminders={kreatin:{on:sh.querySelector("#st-ko").checked,time:sh.querySelector("#st-kt").value||"21:00"},training:{on:sh.querySelector("#st-to").checked,time:sh.querySelector("#st-tt").value||"17:00"}};
         n.supplements=sh.querySelector("#st-supps").value.split("\n").map(x=>x.trim()).filter(Boolean);
         n.restSeconds=+sh.querySelector("#st-rest").value||150;
@@ -1129,7 +1135,7 @@ $("view").addEventListener("click",e=>{
   const em=t.closest("[data-edit-meal]"); if(em){ mealSheet(+em.dataset.editMeal); return; }
   const dm=t.closest("[data-del-meal]"); if(dm){ const d=getDay(cur); d.meals.splice(+dm.dataset.delMeal,1); saveDay(d); return; }
   const fv=t.closest("[data-fav]"); if(fv){ const d=getDay(cur); const m=d.meals[+fv.dataset.fav]; const s=structuredClone(settings); s.favorites=s.favorites||[];
-    const i=s.favorites.findIndex(f=>f.name===m.name); if(i>=0){ s.favorites.splice(i,1); toast("Aus Favoriten entfernt"); } else { s.favorites.push({name:m.name,kcal:m.kcal,carbs:m.carbs,protein:m.protein,fat:m.fat}); toast("Als Favorit gespeichert"); } saveSettings(s); return; }
+    const i=s.favorites.findIndex(f=>f.name===m.name); if(i>=0){ s.favorites.splice(i,1); toast("Aus Favoriten entfernt"); } else { s.favorites.push({name:m.name,kcal:m.kcal,carbs:m.carbs,protein:m.protein,fat:m.fat,...(m.fiber!=null?{fiber:m.fiber}:{})}); toast("Als Favorit gespeichert"); } saveSettings(s); return; }
   const sp=t.closest("[data-supp]"); if(sp){ const d=getDay(cur); const k=sp.dataset.supp; d.supps[k]=!d.supps[k]; saveDay(d); return; }
   const un=t.closest("[data-unit]"); if(un){ unit=un.dataset.unit; unitManual=true; render(); return; }
   const ok=t.closest("[data-set]"); if(ok){ logSet(ok.dataset.set); return; }

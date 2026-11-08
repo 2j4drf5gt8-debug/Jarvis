@@ -512,6 +512,10 @@ nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;top:-
 .toast{background:#0E1012;border-color:rgba(242,194,48,.35)}
 .sheet{background:#08090A;border-top:1px solid rgba(242,194,48,.25)}
 .grab{background:#3A3F45}
+.fib{display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid var(--line)}
+.fib .num b{font-family:var(--display);font-size:1.25rem;color:var(--fg)}
+.fib .num{color:var(--muted);font-size:.85rem}
+.fibbar i{background:linear-gradient(90deg,#9CA6AF,#E6E9EC);box-shadow:none}
 </style>
 </head>
 <body>
@@ -543,7 +547,7 @@ nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;top:-
   </div>
 
   <main id="view"></main>
-  <div class="status"><span id="status">Starte …</span> · Version 28</div>
+  <div class="status"><span id="status">Starte …</span> · Version 29</div>
 </div>
 
 <button class="sesspill" id="sesspill" hidden aria-label="Zum laufenden Training"><span class="dotlive"></span><span id="sesspilltime">0:00</span> Training läuft</button>
