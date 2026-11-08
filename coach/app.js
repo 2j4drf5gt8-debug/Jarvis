@@ -67,7 +67,9 @@ const vitScale=(v,f)=>hasVit(v)?Object.fromEntries(Object.entries(v).filter(([,x
 const vitAdd=(a,b)=>{ if(!hasVit(b)) return a; const o={...(a||{})}; for(const [k,x] of Object.entries(b)) if(x!=null&&!isNaN(+x)) o[k]=(o[k]||0)+(+x); return o; };
 const vitRound=v=>hasVit(v)?Object.fromEntries(Object.entries(v).filter(([,x])=>x!=null&&!isNaN(+x)).map(([k,x])=>[k,Math.round(+x*100)/100])):null;
 const mealVit=m=>hasVit(m.vit)?m.vit:(m.items||[]).reduce((a,i)=>vitAdd(a,i.vit),null);
-const vitTotals=d=>(d.meals||[]).reduce((a,m)=>vitAdd(a,mealVit(m)),{});
+/* Supplements: settings.suppNut = {"<Name>":{<vit-Schlüssel>:Menge}} – abgehakte Supplements zählen mit */
+const suppVit=d=>(settings.supplements||[]).reduce((a,sn)=>d.supps?.[sn]&&hasVit(settings.suppNut?.[sn])?vitAdd(a,settings.suppNut[sn]):a,null);
+const vitTotals=d=>vitAdd((d.meals||[]).reduce((a,m)=>vitAdd(a,mealVit(m)),{}),suppVit(d));
 /* OFF liefert Vitamine in g pro 100 g */
 const OFF_VIT={a:["vitamin-a_100g",1e6],d:["vitamin-d_100g",1e6],e:["vitamin-e_100g",1e3],c:["vitamin-c_100g",1e3],b1:["vitamin-b1_100g",1e3],b2:["vitamin-b2_100g",1e3],b6:["vitamin-b6_100g",1e3],b12:["vitamin-b12_100g",1e6],fol:["vitamin-b9_100g",1e6],mg:["magnesium_100g",1e3],zn:["zinc_100g",1e3],fe:["iron_100g",1e3],ca:["calcium_100g",1e3],k:["potassium_100g",1e3],jod:["iodine_100g",1e6]};
 const offVit=n=>{ const o={}; for(const [k,[f,m]] of Object.entries(OFF_VIT)){ let x=n[f]; if(k==="fol"&&x==null) x=n["folates_100g"]; if(x!=null&&x!==""&&!isNaN(+x)) o[k]=+x*m; } return hasVit(o)?o:null; };
@@ -235,6 +237,7 @@ function vitCard(d){
   return `<section class="card"><details class="vitbox"${vitOpen?" open":""}><summary class="row between"><h2>Mikronährstoffe</h2><span class="hint">${known?`${reached} von ${withT} Zielen erreicht`:"noch keine Angaben"} <span class="chev">▾</span></span></summary>
     <div class="vitgrid">${rows}</div>
     <button class="btn ghost sm" data-act="vitall" style="margin:2px 0 6px">${vitAll?"Nur die wichtigsten zeigen":`Alle ${VITS.length} anzeigen`}</button>
+    ${hasVit(suppVit(d))?`<p class="hint">Inklusive abgehakter Supplements: ${(settings.supplements||[]).filter(sn=>d.supps?.[sn]&&hasVit(settings.suppNut?.[sn])).map(esc).join(", ")}.</p>`:""}
     ${all&&known<all?`<p class="hint">Bei ${all-known} von ${all} Mahlzeiten fehlen Angaben – die Werte oben sind deshalb zu niedrig.</p>`:""}
     <p class="hint">Ziele: DGE/ÖGE-Referenzwerte für Männer, in den Einstellungen änderbar. Vitamin D bildet der Körper zusätzlich über Sonnenlicht.</p></details></section>`;
 }
@@ -901,6 +904,8 @@ function startZX(video,onCode){
 const loadScript=src=>new Promise((res,rej)=>{const s=document.createElement("script");s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});
 
 /* ---------------- settings sheet: protein, supplements, reminders, plan ---------------- */
+function suppRow(name="",nut){ const [k,v]=Object.entries(nut||{})[0]||["",""];
+  return `<div class="supprow"><input class="field" data-sk="name" value="${esc(name)}" placeholder="Name, z. B. D3"><select class="field" data-sk="nut"><option value="">kein Nährstoff</option>${VITS.map(([vk,l,u])=>`<option value="${vk}" ${vk===k?"selected":""}>${l} (${u})</option>`).join("")}</select><input class="field num" data-sk="amt" type="number" inputmode="decimal" step="any" value="${v===""?"":v}" placeholder="Menge"><button class="x" data-delsupp="1" aria-label="Supplement entfernen">×</button></div>`; }
 function settingsSheet(){
   const s=settings, rem=s.reminders||DEFAULT_SETTINGS.reminders;
   const planRows=u=>(s.plan?.[u]||[]).map((p,i)=>`<div class="planrow" data-u="${u}" data-i="${i}">
@@ -925,7 +930,9 @@ function settingsSheet(){
       <div class="row between"><div><div style="font-weight:600">Trainingstag</div><div class="hint">„Heute ist U1/U2 dran“</div></div><div class="row"><input class="field num" id="st-tt" type="time" value="${rem.training.time}" style="width:110px"><label class="switch"><input type="checkbox" id="st-to" ${rem.training.on?"checked":""}><span></span></label></div></div>
       <button class="btn block" id="st-push">Mitteilungen auf diesem iPhone erlauben</button>
       <p class="hint" id="st-pushmsg">Funktioniert nur, wenn Jarvis über „Zum Home-Bildschirm“ installiert ist.</p></div>
-    <div class="card"><h3>Supplements</h3><p class="hint">Eins pro Zeile.</p><textarea class="field" id="st-supps" rows="3">${esc(s.supplements.join("\n"))}</textarea></div>
+    <div class="card"><h3>Supplements</h3><p class="hint">Mit Nährstoff und Menge: Wenn du es unter „Heute“ abhakst, zählt die Menge bei den Mikronährstoffen mit. Vitamin D in µg (40 IE = 1 µg, 4000 IE = 100 µg).</p>
+      <div id="supprows" style="display:flex;flex-direction:column;gap:8px">${s.supplements.map(n=>suppRow(n,s.suppNut?.[n])).join("")}</div>
+      <button class="btn ghost sm" data-addsupp="1">${ICON.plus}Supplement</button></div>
     <div class="card"><h3>Trainingsplan</h3><p class="hint">Übung · Sätze · Wdh von · bis</p>
       ${["U1","U2"].map(u=>`<div class="lbl" style="margin-top:4px">${u}</div><div style="display:flex;flex-direction:column;gap:6px" id="plan-${u}">${planRows(u)}</div><button class="btn ghost sm" data-addex="${u}">${ICON.plus}Übung zu ${u}</button>`).join("")}
       <div class="row"><span class="lbl">Pause zwischen Sätzen</span><input class="field num" id="st-rest" type="number" inputmode="numeric" value="${s.restSeconds||150}" style="width:90px"><span class="muted">s</span></div></div>
@@ -936,6 +943,8 @@ function settingsSheet(){
         const add=e.target.closest("[data-addex]"); if(add){ const u=add.dataset.addex; const box=sh.querySelector("#plan-"+u); const i=box.children.length;
           box.insertAdjacentHTML("beforeend",`<div class="planrow" data-u="${u}" data-i="${i}"><input class="field n" data-k="name" placeholder="Neue Übung"><input class="field num" data-k="sets" type="number" value="2"><input class="field num" data-k="lo" type="number" value="6"><input class="field num" data-k="hi" type="number" value="10"><button class="x" data-delex="${u}-${i}">×</button></div>`); }
         const del=e.target.closest("[data-delex]"); if(del) del.closest(".planrow").remove();
+        if(e.target.closest("[data-addsupp]")) sh.querySelector("#supprows").insertAdjacentHTML("beforeend",suppRow());
+        const ds=e.target.closest("[data-delsupp]"); if(ds) ds.closest(".supprow").remove();
       });
       sh.querySelector("#st-push").onclick=()=>enablePush(sh.querySelector("#st-pushmsg"));
       sh.querySelector("#st-logout").onclick=async()=>{ await sb?.auth.signOut(); session=null; closeSheet(); $("login").hidden=false; };
@@ -944,7 +953,9 @@ function settingsSheet(){
         n.proteinTarget = +sh.querySelector("#st-prot").value || 0; n.fiberTarget = +sh.querySelector("#st-fib").value || 0;
         n.vitTargets=Object.fromEntries([...sh.querySelectorAll("[data-vt]")].map(i=>[i.dataset.vt,i.value===""?0:(+i.value.replace(",",".")||0)]));
         n.reminders={kreatin:{on:sh.querySelector("#st-ko").checked,time:sh.querySelector("#st-kt").value||"21:00"},training:{on:sh.querySelector("#st-to").checked,time:sh.querySelector("#st-tt").value||"17:00"}};
-        n.supplements=sh.querySelector("#st-supps").value.split("\n").map(x=>x.trim()).filter(Boolean);
+        n.supplements=[]; n.suppNut={};
+        sh.querySelectorAll(".supprow").forEach(row=>{ const g=k=>row.querySelector(`[data-sk="${k}"]`).value; const name=g("name").trim(); if(!name||n.supplements.includes(name)) return;
+          n.supplements.push(name); const k=g("nut"), a=+String(g("amt")).replace(",","."); if(k&&a>0) n.suppNut[name]={[k]:a}; });
         n.restSeconds=+sh.querySelector("#st-rest").value||150;
         const okUrl=(v,host)=>{ v=v.trim(); try{ const u=new URL(v); return u.protocol==="https:"&&u.hostname.endsWith(host)?v:""; }catch(_){ return ""; } };
         n.playlistUrl=okUrl(sh.querySelector("#st-sp").value,"spotify.com"); n.soundcloudUrl=okUrl(sh.querySelector("#st-sc").value,"soundcloud.com");
