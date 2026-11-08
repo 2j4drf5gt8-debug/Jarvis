@@ -474,6 +474,49 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
 .hero .sub,.hero .muted{text-shadow:0 1px 8px rgba(0,0,0,.95)}
 .hero .hbub::before{display:none}
 .hero .hbub{background:rgba(5,6,7,.82)}
+/* v33: Notizen mit Ordnern */
+.nfgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.nfold{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-height:118px;padding:14px;text-align:left;
+  background:linear-gradient(180deg,rgba(18,20,23,.9),rgba(10,11,13,.92));border:1px solid #1F2226;border-radius:4px;
+  clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px))}
+.nfold::before{content:"";position:absolute;left:0;top:0;width:14px;height:14px;border-left:2px solid rgba(242,194,48,.7);border-top:2px solid rgba(242,194,48,.7)}
+.nfold:active{transform:scale(.97)}
+.nf-ic{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:rgba(242,194,48,.12);color:var(--accent);flex:none}
+.nf-ic svg{width:22px;height:22px}
+.nf-ic.big{width:48px;height:48px}.nf-ic.big svg{width:26px;height:26px}
+.nf-ic.pick{border:1px solid var(--line2);background:#0C0D0F;color:var(--fg2)}
+.nf-ic.pick[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);box-shadow:0 0 12px rgba(242,194,48,.3)}
+.nf-name{font-family:var(--display);font-weight:800;font-size:1.15rem;letter-spacing:.03em;text-transform:uppercase;line-height:1.05;color:var(--fg)}
+.nf-meta{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.nf-add{border-style:dashed;background:rgba(10,11,13,.6)}
+.nf-add .nf-ic{background:#16181B;color:var(--fg2)}
+.nf-head{display:flex;justify-content:space-between;align-items:center;margin:-4px 0 -6px}
+.nlist{gap:0}
+.nlist h2{margin-bottom:8px}
+.nrow{position:relative;display:flex;align-items:center;gap:10px;padding:12px 0 12px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.nrow:last-child{border-bottom:0}
+.nrow::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:2px;background:var(--nc,transparent)}
+.nrow:active{background:rgba(242,194,48,.05)}
+.nr-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.nr-title{font-weight:700;font-size:1.02rem;line-height:1.25;overflow-wrap:anywhere}
+.nr-pin{margin-right:4px}
+.nr-prev{color:var(--fg2);font-size:.9rem;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.nr-meta{display:flex;gap:10px;font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+.nr-ck{color:var(--accent)}
+.nr-go{color:var(--muted);font-size:1.4rem;padding-right:2px}
+.sheet:has(.neditor){height:96dvh;max-height:96dvh}
+.neditor .nf-sel{padding:8px 10px;font-size:16px}
+.neditor .ntitle{font-family:var(--display);font-size:1.7rem;font-weight:800;letter-spacing:.02em;text-transform:none}
+.neditor textarea{font-size:16px;line-height:1.55;background:transparent;border-color:transparent;padding:4px 0}
+.neditor textarea:focus{box-shadow:none;border-color:transparent}
+.nview{display:flex;flex-direction:column;gap:6px;font-size:1rem;line-height:1.5;min-height:30dvh;color:var(--fg);cursor:text;overflow-wrap:anywhere}
+.nview b{font-family:var(--display);font-size:1.25rem;letter-spacing:.03em;text-transform:uppercase;margin-top:6px;color:var(--fg)}
+.nview .ck{display:flex;gap:10px;align-items:flex-start;padding:4px 0;cursor:pointer}
+.nview .ck i{flex:none;width:22px;height:22px;margin-top:1px;border-radius:6px;border:2px solid var(--line2);display:grid;place-items:center;font-style:normal;font-size:.8rem;transition:background-color .15s ease}
+.nview .ck.done{color:var(--muted);text-decoration:line-through}
+.nview .ck.done i{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.nview .tag,.nr-prev .tag{color:var(--accent)}
+.ne-editbtn{align-self:flex-start}
 </style>
 </head>
 <body>
@@ -505,7 +548,7 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
   </div>
 
   <main id="view"></main>
-  <div class="status"><span id="status">Starte …</span> · Version 32</div>
+  <div class="status"><span id="status">Starte …</span> · Version 33</div>
 </div>
 
 <button class="sesspill" id="sesspill" hidden aria-label="Zum laufenden Training"><span class="dotlive"></span><span id="sesspilltime">0:00</span> Training läuft</button>

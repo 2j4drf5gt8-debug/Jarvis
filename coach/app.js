@@ -7,7 +7,7 @@ const DEFAULT_SETTINGS = {
   supplements:["Kreatin (5 g)"], cycle:["U1","U2","Pause"], restSeconds:150,
   proteinTarget:160, fiberTarget:30, favorites:[], plan:{U1:[],U2:[]},
   reminders:{kreatin:{on:true,time:"21:00"},training:{on:true,time:"17:00"}},
-  goalDate:"2027-01-31", goalLabel:"Ende des Auslandssemesters", playlistUrl:"", soundcloudUrl:"", autoMusic:"soundcloud", startSound:true
+  noteFolders:[{id:"uni",name:"Uni & Oviedo",icon:"uni"},{id:"karriere",name:"Praktikum & Karriere",icon:"karriere"},{id:"training",name:"Training & Ernährung",icon:"training"},{id:"privat",name:"Ideen & Privates",icon:"privat"}], goalDate:"2027-01-31", goalLabel:"Ende des Auslandssemesters", playlistUrl:"", soundcloudUrl:"", autoMusic:"soundcloud", startSound:true
 };
 const iso = d => d.toLocaleDateString("sv-SE");
 const TODAY = () => iso(new Date());
@@ -25,7 +25,7 @@ let unit = null, unitManual = false, selEx = null, selMeas = "biceps";
 const days = new Map();
 let reports = [];
 const notes = new Map();
-let noteQ = "", noteTag = "";
+let noteQ = "", noteTag = "", noteFolder = null;
 let sb = null, session = null;
 const extraRows = {};
 
@@ -426,28 +426,72 @@ function noteHTML(text,limit){
   return out.join("");
 }
 function saveNote(n){ n.updated=Date.now(); notes.set(n.id,n); write("notes/"+n.id,n); }
+const NICON={
+  uni:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/></svg>',
+  karriere:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5h6v2M3 13h18"/></svg>',
+  training:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/></svg>',
+  privat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>',
+  ordner:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6h6l2 2h10v11H3z"/></svg>',
+  none:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5h14v14H5zM9 9h6M9 13h6"/></svg>'};
+const folders=()=>settings.noteFolders?.length?settings.noteFolders:DEFAULT_SETTINGS.noteFolders;
+const TAGMAP={training:"training",gym:"training",essen:"training",ernaehrung:"training",ernährung:"training",einkauf:"privat",idee:"privat",privat:"privat",uni:"uni",oviedo:"uni",erasmus:"uni",praktikum:"karriere",bewerbung:"karriere",karriere:"karriere"};
+function folderOf(n){ const ids=folders().map(f=>f.id); if(n.folder&&ids.includes(n.folder)) return n.folder;
+  for(const t of tagsOf((n.title||"")+" "+(n.text||""))){ const g=TAGMAP[t.slice(1)]; if(g&&ids.includes(g)) return g; } return "_none"; }
+const nAgo=ts=>{ if(!ts) return ""; const d=new Date(ts); return iso(d)===TODAY()?d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"}):d.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"2-digit"}); };
+const nPlain=t=>String(t||"").split("\n").map(l=>l.replace(/^\s*[-*] \[( |x|X)\] ?/,"☐ ").replace(/^#\s*/,"").replace(/^\s*[-*] /,"• ").trim()).filter(Boolean).join(" · ");
+const nChecks=t=>{ const all=(t||"").match(/\[[ xX]\]/g); if(!all) return ""; return `${((t||"").match(/\[[xX]\]/g)||[]).length}/${all.length}`; };
+function noteRow(n){
+  const ck=nChecks(n.text), fname=noteQ?(folders().find(f=>f.id===folderOf(n))?.name||"Unsortiert"):"";
+  return `<article class="nrow" data-note="${esc(n.id)}" style="--nc:${NCOL[n.color||""]}" tabindex="0" role="button">
+    <div class="nr-main"><div class="nr-title">${n.pinned?'<span class="nr-pin">📌</span>':""}${esc(n.title||nPlain(n.text).slice(0,60)||"Ohne Titel")}</div>
+      <div class="nr-prev">${esc(nPlain(n.title?n.text:String(n.text||"").split("\n").slice(1).join("\n")).slice(0,160))||'<span class="muted">Keine weiteren Inhalte</span>'}</div>
+      <div class="nr-meta"><span>${nAgo(n.updated||n.created)}</span>${ck?`<span class="nr-ck">☑ ${ck}</span>`:""}${fname?`<span>${esc(fname)}</span>`:""}</div></div>
+    <span class="nr-go" aria-hidden="true">›</span></article>`;
+}
 function viewNotizen(){
-  let list=[...notes.values()];
-  const allTags=[...new Set(list.flatMap(n=>tagsOf((n.title||"")+" "+(n.text||""))))].slice(0,12);
-  if(noteTag) list=list.filter(n=>tagsOf((n.title||"")+" "+(n.text||"")).includes(noteTag));
-  if(noteQ){ const q=noteQ.toLowerCase(); list=list.filter(n=>((n.title||"")+" "+(n.text||"")).toLowerCase().includes(q)); }
-  list.sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||b.updated-a.updated);
-  const ago=ts=>{ const d=new Date(ts); return iso(d)===TODAY()?d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"}):d.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"}); };
-  return `
-  <section class="card nquick">
-    <textarea class="field" id="nq-text" rows="2" placeholder="Schnell notieren … (#tag für Kategorien, - [ ] für Checklisten)"></textarea>
-    <div class="row between wrapf"><div class="pills">
-      <button class="pill" data-tpl="training">Trainingsnotiz</button><button class="pill" data-tpl="einkauf">Einkaufsliste</button><button class="pill" data-tpl="idee">Idee</button></div>
-      <button class="btn pri sm" data-act="nq-save">${ICON.plus}Speichern</button></div>
-  </section>
-  ${notes.size?`<div class="row" style="gap:8px"><input class="field" id="note-q" placeholder="Suchen …" value="${esc(noteQ)}" style="flex:1"></div>`:""}
-  ${allTags.length?`<div class="exchips"><button data-ntag="" aria-pressed="${!noteTag}">Alle</button>${allTags.map(t=>`<button data-ntag="${esc(t)}" aria-pressed="${t===noteTag}">${esc(t)}</button>`).join("")}</div>`:""}
-  ${list.length?`<div class="ngrid">${list.map(n=>`<article class="note" data-note="${esc(n.id)}" style="--nc:${NCOL[n.color||""]}" tabindex="0">
-      ${n.title?`<h4>${n.pinned?'<span style="color:var(--accent)">📌 </span>':""}${esc(n.title)}</h4>`:(n.pinned?'<h4 style="color:var(--accent)">📌</h4>':"")}
-      <div class="nb">${noteHTML(n.text,9)}</div>
-      <div class="meta"><span>${ago(n.updated)}</span>${(n.text||"").match(/\[[ xX]\]/g)?`<span>${((n.text||"").match(/\[[xX]\]/g)||[]).length}/${(n.text||"").match(/\[[ xX]\]/g).length}</span>`:""}</div>
-    </article>`).join("")}</div>`
-    :`<p class="empty" style="text-align:center;padding:24px 0">${notes.size?"Nichts gefunden.":"Noch keine Notizen. Schreib oben einfach los."}</p>`}`;
+  const all=[...notes.values()].filter(n=>n.updated||n.title||(n.text||"").trim()).sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(b.updated||0)-(a.updated||0));
+  const search=`<div class="row" style="gap:8px"><input class="field" id="note-q" type="search" placeholder="Alle Notizen durchsuchen …" value="${esc(noteQ)}" style="flex:1"></div>`;
+  if(noteQ){ const q=noteQ.toLowerCase(); const res=all.filter(n=>((n.title||"")+" "+(n.text||"")).toLowerCase().includes(q));
+    return `${search}<section class="card nlist"><div class="row between"><h2>Suche</h2><span class="hint">${res.length} Treffer</span></div>
+      ${res.length?res.map(noteRow).join(""):'<p class="empty">Nichts gefunden.</p>'}</section>`; }
+  if(noteFolder===null){
+    const by={}; all.forEach(n=>{ const f=folderOf(n); (by[f]=by[f]||[]).push(n); });
+    const tile=(id,name,icon)=>{ const L=by[id]||[]; return `<button class="nfold" data-nfold="${esc(id)}"><span class="nf-ic">${NICON[icon]||NICON.ordner}</span>
+      <span class="nf-name">${esc(name)}</span><span class="nf-meta">${L.length} ${L.length===1?"Notiz":"Notizen"}${L.length?` · ${nAgo(L[0].updated||L[0].created)}`:""}</span></button>`; };
+    const pinned=all.filter(n=>n.pinned).slice(0,5);
+    return `${search}
+    <div class="nfgrid">${folders().map(f=>tile(f.id,f.name,f.icon)).join("")}${(by._none||[]).length?tile("_none","Unsortiert","none"):""}
+      <button class="nfold nf-add" data-act="nf-addfolder"><span class="nf-ic">${ICON.plus}</span><span class="nf-name">Neuer Ordner</span><span class="nf-meta">eigene Kategorie</span></button></div>
+    ${pinned.length?`<section class="card nlist"><h2>Angeheftet</h2>${pinned.map(noteRow).join("")}</section>`:""}
+    ${all.length?`<section class="card nlist"><h2>Zuletzt bearbeitet</h2>${all.filter(n=>!n.pinned).slice(0,4).map(noteRow).join("")||'<p class="empty">Alles angeheftet.</p>'}</section>`
+      :`<p class="empty" style="text-align:center;padding:12px 0">Noch keine Notizen. Öffne einen Ordner und leg los – oder sag Jarvis einfach, was er notieren soll.</p>`}`;
+  }
+  const f=folders().find(x=>x.id===noteFolder)||{id:"_none",name:"Unsortiert",icon:"none"};
+  const L=all.filter(n=>folderOf(n)===f.id);
+  return `<div class="nf-head"><button class="btn sm ghost" data-act="nf-back">‹ Ordner</button>${f.id!=="_none"?`<button class="btn sm ghost" data-act="nf-edit">Bearbeiten</button>`:""}</div>
+    <section class="card nf-hero"><div class="row" style="gap:12px"><span class="nf-ic big">${NICON[f.icon]||NICON.ordner}</span><div style="min-width:0"><h2>${esc(f.name)}</h2><span class="hint">${L.length} ${L.length===1?"Notiz":"Notizen"}</span></div></div>
+      <textarea class="field" id="nq-text" rows="2" placeholder="Schnell notieren … (erste Zeile = Titel, - [ ] für Checklisten)"></textarea>
+      <div class="row between wrapf" style="gap:8px"><div class="pills">${f.id==="training"?'<button class="pill" data-tpl="training">Trainingsnotiz</button>':""}${f.id==="privat"?'<button class="pill" data-tpl="einkauf">Einkaufsliste</button>':""}<button class="pill" data-act="nf-newnote">Leere Notiz</button></div>
+        <button class="btn pri sm" data-act="nq-save">${ICON.plus}Speichern</button></div></section>
+    <section class="card nlist">${L.length?L.map(noteRow).join(""):'<p class="empty">Noch leer. Schreib oben los.</p>'}</section>`;
+}
+function folderSheet(id){
+  const isNew=!id; const fs=structuredClone(folders()); const f=isNew?{id:"f"+nid(),name:"",icon:"ordner"}:fs.find(x=>x.id===id); if(!f) return;
+  openSheet(`<div class="row between"><h2>${isNew?"Neuer Ordner":"Ordner bearbeiten"}</h2><button class="x" data-close>×</button></div>
+    <input class="field" id="fo-name" placeholder="Name, z. B. Finanzen" value="${esc(f.name)}" maxlength="40">
+    <div class="lbl">Symbol</div><div class="row wrapf" style="gap:8px">${["uni","karriere","training","privat","ordner"].map(k=>`<button class="nf-ic pick" data-ic="${k}" aria-pressed="${f.icon===k}">${NICON[k]}</button>`).join("")}</div>
+    <button class="btn pri block" id="fo-save">Speichern</button>
+    ${isNew?"":`<button class="btn ghost block" id="fo-del" style="color:var(--warn)">Ordner löschen (Notizen wandern nach „Unsortiert“)</button>`}`, sh=>{
+      let icon=f.icon, armed=false;
+      sh.addEventListener("click",e=>{ if(e.target.closest("[data-close]")) return closeSheet();
+        const ic=e.target.closest("[data-ic]"); if(ic){ icon=ic.dataset.ic; sh.querySelectorAll("[data-ic]").forEach(b=>b.setAttribute("aria-pressed",b===ic)); } });
+      sh.querySelector("#fo-save").onclick=()=>{ const name=sh.querySelector("#fo-name").value.trim(); if(!name){ toast("Bitte einen Namen eingeben"); return; }
+        const s2=structuredClone(settings); s2.noteFolders=fs; if(isNew) fs.push({id:f.id,name,icon}); else Object.assign(f,{name,icon});
+        saveSettings(s2); closeSheet(); if(isNew){ noteFolder=f.id; render(); } toast("Gespeichert"); };
+      const del=sh.querySelector("#fo-del"); if(del) del.onclick=()=>{ if(!armed){ armed=true; del.textContent="Wirklich löschen?"; return; }
+        notes.forEach(n=>{ if(n.folder===f.id){ const m=structuredClone(n); delete m.folder; saveNote(m); } });
+        const s2=structuredClone(settings); s2.noteFolders=fs.filter(x=>x.id!==f.id); noteFolder=null; saveSettings(s2); closeSheet(); toast("Ordner gelöscht"); };
+    });
 }
 const TPL={
   training:()=>({title:`Training ${dLabel(TODAY())}`,text:`Einheit: ${nextDue().unit}\nGefühl (1–5): \nSchlaf: \n\n# Notizen\n- \n\n#training`}),
@@ -460,17 +504,23 @@ function noteEditor(id){
   openSheet(`<div class="row between"><div class="ndots" role="group" aria-label="Farbe">${Object.keys(NCOL).map(c=>`<button data-col="${c}" aria-pressed="${(n.color||"")===c}" aria-label="Farbe ${c||"keine"}" style="background:${c?NCOL[c]:"var(--raise)"}"></button>`).join("")}</div>
       <div class="row" style="gap:4px"><button class="btn sm ${n.pinned?"pri":""}" id="ne-pin">📌</button><button class="x" data-close aria-label="Schließen">×</button></div></div>
     <div class="neditor" style="display:flex;flex-direction:column;gap:8px">
+      <select class="field nf-sel" id="ne-folder" aria-label="Ordner">${folders().map(f=>`<option value="${esc(f.id)}" ${folderOf(n)===f.id?"selected":""}>${esc(f.name)}</option>`).join("")}<option value="" ${folderOf(n)==="_none"?"selected":""}>Unsortiert</option></select>
       <input class="ntitle" id="ne-title" placeholder="Titel" value="${esc(n.title||"")}">
-      <textarea class="field" id="ne-text" placeholder="Notiz …">${esc(n.text||"")}</textarea>
-      <div class="row wrapf" style="gap:6px"><button class="btn sm" data-ins="- [ ] ">☐ Checkliste</button><button class="btn sm" data-ins="- ">• Liste</button><button class="btn sm" data-ins="# ">Überschrift</button><button class="btn sm" data-ins="#">#Tag</button></div>
+      <div class="nview" id="ne-view" ${(n.text||"").trim()?"":"hidden"}></div><textarea class="field" id="ne-text" placeholder="Notiz …" ${(n.text||"").trim()?"hidden":""}>${esc(n.text||"")}</textarea>
+      <button class="btn sm ne-editbtn" id="ne-edit" ${(n.text||"").trim()?"":"hidden"}>✎ Bearbeiten</button><div class="row wrapf" id="ne-tools" style="gap:6px" ${(n.text||"").trim()?"hidden":""}><button class="btn sm" data-ins="- [ ] ">☐ Checkliste</button><button class="btn sm" data-ins="- ">• Liste</button><button class="btn sm" data-ins="# ">Überschrift</button><button class="btn sm" data-ins="#">#Tag</button></div>
       <div class="row between"><span class="hint" id="ne-st">Wird automatisch gespeichert</span><button class="btn ghost sm" id="ne-del" style="color:var(--warn)">Löschen</button></div>
     </div>`, sh=>{
       const ta=sh.querySelector("#ne-text"), ti=sh.querySelector("#ne-title");
-      const grow=()=>{ ta.style.height="auto"; ta.style.height=Math.max(window.innerHeight*0.42,ta.scrollHeight)+"px"; }; grow();
+      const grow=()=>{ ta.style.height="auto"; ta.style.height=Math.max(window.innerHeight*0.5,ta.scrollHeight)+"px"; }; grow();
       const persist=()=>{ clearTimeout(t); t=setTimeout(()=>{ n.title=ti.value.trim(); n.text=ta.value; saveNote(n); sh.querySelector("#ne-st").textContent="Gespeichert"; },450); };
-      ta.oninput=()=>{grow();persist();}; ti.oninput=persist;
+      const vw=sh.querySelector("#ne-view"); const paintView=()=>{ vw.innerHTML=noteHTML(ta.value)||'<p class="hint">Leer – tippe auf Bearbeiten.</p>'; }; paintView();
+      const editMode=()=>{ vw.hidden=true; ta.hidden=false; sh.querySelector("#ne-tools").hidden=false; sh.querySelector("#ne-edit").hidden=true; grow(); ta.focus(); };
+      sh.querySelector("#ne-edit").onclick=editMode;
+      vw.addEventListener("click",ev=>{ const ck=ev.target.closest("[data-cki]"); if(!ck){ editMode(); return; } const L=ta.value.split("\n"), i=+ck.dataset.cki;
+        L[i]=/\[( )\]/.test(L[i])?L[i].replace("[ ]","[x]"):L[i].replace(/\[[xX]\]/,"[ ]"); ta.value=L.join("\n"); paintView(); persist(); });
+      ta.oninput=()=>{grow();persist();}; ti.oninput=persist; sh.querySelector("#ne-folder").onchange=e=>{ const v=e.target.value; if(v) n.folder=v; else delete n.folder; persist(); };
       sh.addEventListener("click",e=>{
-        if(e.target.closest("[data-close]")){ n.title=ti.value.trim(); n.text=ta.value; if(n.title||n.text.trim()) saveNote(n); closeSheet(); render(); return; }
+        if(e.target.closest("[data-close]")){ n.title=ti.value.trim(); n.text=ta.value; if(n.title||n.text.trim()) saveNote(n); else if(!notes.get(n.id)?.updated) notes.delete(n.id); closeSheet(); render(); return; }
         const c=e.target.closest("[data-col]"); if(c){ n.color=c.dataset.col; sh.querySelectorAll("[data-col]").forEach(b=>b.setAttribute("aria-pressed",b===c)); persist(); }
         if(e.target.closest("#ne-pin")){ n.pinned=!n.pinned; e.target.closest("#ne-pin").classList.toggle("pri",n.pinned); persist(); }
         const ins=e.target.closest("[data-ins]"); if(ins){ const v=ins.dataset.ins, p=ta.selectionStart??ta.value.length; const before=ta.value.slice(0,p), nl=before&&!before.endsWith("\n")&&v!=="#"?"\n":"";
@@ -1150,8 +1200,13 @@ $("view").addEventListener("click",e=>{
     const d=getDay(TODAY()); d.training={type:"",sets:[]}; Object.keys(extraRows).forEach(k=>delete extraRows[k]); unitManual=false; saveDay(d); toast("Training zurückgesetzt"); return; }
   const se=t.closest("[data-act=sess-end]"); if(se){ if(!se.dataset.armed){ se.dataset.armed="1"; se.textContent="Sicher?"; se.classList.add("pri"); setTimeout(()=>{ if(document.body.contains(se)){ delete se.dataset.armed; se.textContent="■ Beenden"; se.classList.remove("pri"); } },3000); return; } endSession(); return; }
   const ms=t.closest("[data-meas-sel]"); if(ms){ selMeas=ms.dataset.measSel; render(); return; }
-  if(t.closest("[data-act=nq-save]")){ const v=$("nq-text").value; if(!v.trim()) return; const lines=v.trim().split("\n"); const n={id:nid(),title:lines.length>1?lines[0].slice(0,80):"",text:lines.length>1?lines.slice(1).join("\n"):v.trim(),color:"",pinned:false,created:Date.now()}; saveNote(n); render(); toast("Notiz gespeichert"); return; }
-  const tp=t.closest("[data-tpl]"); if(tp){ const base=TPL[tp.dataset.tpl](); const n={id:nid(),color:"",pinned:false,created:Date.now(),...base}; saveNote(n); render(); noteEditor(n.id); return; }
+  if(t.closest("[data-act=nq-save]")){ const v=$("nq-text").value; if(!v.trim()) return; const lines=v.trim().split("\n"); const n={id:nid(),title:lines.length>1?lines[0].slice(0,80):"",text:lines.length>1?lines.slice(1).join("\n"):v.trim(),color:"",pinned:false,created:Date.now()}; if(noteFolder&&noteFolder!=="_none") n.folder=noteFolder; saveNote(n); render(); toast("Notiz gespeichert"); return; }
+  const nfo=t.closest("[data-nfold]"); if(nfo){ noteFolder=nfo.dataset.nfold; noteQ=""; render(); window.scrollTo(0,0); return; }
+  if(t.closest("[data-act=nf-back]")){ noteFolder=null; render(); window.scrollTo(0,0); return; }
+  if(t.closest("[data-act=nf-addfolder]")){ folderSheet(null); return; }
+  if(t.closest("[data-act=nf-edit]")){ folderSheet(noteFolder); return; }
+  if(t.closest("[data-act=nf-newnote]")){ const n={id:nid(),title:"",text:"",color:"",pinned:false,created:Date.now()}; if(noteFolder&&noteFolder!=="_none") n.folder=noteFolder; notes.set(n.id,n); noteEditor(n.id); return; }
+  const tp=t.closest("[data-tpl]"); if(tp){ const base=TPL[tp.dataset.tpl](); const n={id:nid(),color:"",pinned:false,created:Date.now(),...base}; if(noteFolder&&noteFolder!=="_none") n.folder=noteFolder; saveNote(n); render(); noteEditor(n.id); return; }
   const nt=t.closest("[data-ntag]"); if(nt){ noteTag=nt.dataset.ntag; render(); return; }
   const ck=t.closest(".note [data-cki]"); if(ck){ e.stopPropagation(); const card=ck.closest("[data-note]"); const n=structuredClone(notes.get(card.dataset.note)); const L=n.text.split("\n"); const i=+ck.dataset.cki;
     L[i]=/\[( )\]/.test(L[i])?L[i].replace("[ ]","[x]"):L[i].replace(/\[[xX]\]/,"[ ]"); n.text=L.join("\n"); saveNote(n); render(); return; }
