@@ -211,8 +211,8 @@ function viewHeute(){
   const quick=[...favs.map(f=>({...f,fav:true})),...recent.filter(m=>!favs.some(f=>f.name===m.name))].slice(0,10);
   const wk=[...Array(7)].map((_,i)=>{const ds=shift(TODAY(),i-6);return{ds,l:new Date(ds+"T12:00:00").toLocaleDateString("de-DE",{weekday:"short"}).slice(0,2),v:totals(days.get(ds)||emptyDay(ds)).kcal,hl:ds===cur};});
   return `
-  ${cur===TODAY()?`<section class="card hero"><div class="beam b1"></div><div class="beam b2"></div><div class="fog"></div><div class="sky">${SKYLINE}</div>
-    ${(()=>{ const j=jarvisState(); return `<div class="hlogo" aria-hidden="true"><img src="icon-512.png?v=8" alt=""></div>`; })()}
+  ${cur===TODAY()?`<section class="card hero">
+    ${(()=>{ const j=jarvisState(); return ``; })()}
     <div class="row between"><span class="lbl">Laut Rhythmus heute</span>${due.today&&(getDay(TODAY()).training.sets||[]).length?'<span class="chip" style="color:#fff;border-color:rgba(255,255,255,.35)">läuft</span>':""}</div>
     <div class="row between" style="align-items:flex-end"><div><b>${due.unit==="Pause"?"Pause":due.unit}</b>
       <div class="sub">${due.unit==="Pause"?"Erholung. Morgen geht’s weiter.":(()=>{const pl=settings.plan?.[due.unit]||[];const ns=pl.reduce((a,p)=>a+p.sets,0); return pl.length?`${pl.length} ${pl.length===1?"Übung":"Übungen"} · ${ns} ${ns===1?"Satz":"Sätze"}`:"Noch kein Plan angelegt";})()}${due.last&&!due.today?`<br><span class="muted">Zuletzt ${esc(due.last.training.type)} am ${dLabel(due.last.date)}</span>`:""}</div></div>

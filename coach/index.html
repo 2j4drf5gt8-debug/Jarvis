@@ -466,6 +466,14 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
 .card{background:linear-gradient(180deg,rgba(18,20,23,.86),rgba(10,11,13,.9))}
 .hero{background:linear-gradient(180deg,rgba(15,18,23,.84) 0%,rgba(5,6,7,.94) 82%)}
 .stat,.supp,.quick button{background:rgba(18,20,23,.85)}
+/* v32: schlichter Hero mit Logo */
+.hero{min-height:0;background:
+  linear-gradient(90deg,rgba(5,6,7,.96) 0%,rgba(5,6,7,.86) 42%,rgba(5,6,7,.35) 78%,rgba(5,6,7,.2) 100%),
+  url("icon-512.png?v=8") right -30px center/auto 125% no-repeat,#050607}
+.hero .sub{max-width:none;white-space:normal}
+.hero .sub,.hero .muted{text-shadow:0 1px 8px rgba(0,0,0,.95)}
+.hero .hbub::before{display:none}
+.hero .hbub{background:rgba(5,6,7,.82)}
 </style>
 </head>
 <body>
@@ -497,7 +505,7 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
   </div>
 
   <main id="view"></main>
-  <div class="status"><span id="status">Starte …</span> · Version 31</div>
+  <div class="status"><span id="status">Starte …</span> · Version 32</div>
 </div>
 
 <button class="sesspill" id="sesspill" hidden aria-label="Zum laufenden Training"><span class="dotlive"></span><span id="sesspilltime">0:00</span> Training läuft</button>
