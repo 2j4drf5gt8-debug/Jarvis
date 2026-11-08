@@ -55,9 +55,11 @@ const saveDay = d => { days.set(d.date,d); render(); return write("days/"+d.date
 const saveSettings = s => { settings=s; render(); return write("settings/main",s); };
 const sorted = () => [...days.values()].sort((a,b)=>a.date<b.date?-1:1);
 /* Vitamine: Referenzwerte DGE/ÖGE 2024 für Männer (Altersgruppe 25–<51; B6 laut DGE 1,6 mg für erwachsene Männer).
-   Datenformat: meal.vit / item.vit / per100.vit = {a:µg,d:µg,e:mg,c:mg,b1:mg,b2:mg,b6:mg,b12:µg,fol:µg} – fehlender Schlüssel = unbekannt */
-const VITS=[["a","Vitamin A","µg",850],["d","Vitamin D","µg",20],["e","Vitamin E","mg",14],["c","Vitamin C","mg",110],["b1","Vitamin B1","mg",1.2],["b2","Vitamin B2","mg",1.4],["b6","Vitamin B6","mg",1.6],["b12","Vitamin B12","µg",4],["fol","Folat","µg",300]];
-const VIT_FOCUS=["d","c","fol","b12"];
+   Datenformat: meal.vit / item.vit / per100.vit = {a:µg,d:µg,e:mg,c:mg,b1:mg,b2:mg,b6:mg,b12:µg,fol:µg,mg:mg,zn:mg,fe:mg,ca:mg,k:mg,jod:µg} – fehlender Schlüssel = unbekannt */
+const VITS=[["a","Vitamin A","µg",850],["d","Vitamin D","µg",20],["e","Vitamin E","mg",14],["c","Vitamin C","mg",110],["b1","Vitamin B1","mg",1.2],["b2","Vitamin B2","mg",1.4],["b6","Vitamin B6","mg",1.6],["b12","Vitamin B12","µg",4],["fol","Folat","µg",300],
+  /* Mineralstoffe (DGE/ÖGE, Männer ab 19): Mg Schätzwert 2021, Zink bei mittlerer Phytatzufuhr, Kalium Schätzwert; im selben vit-Objekt gespeichert */
+  ["mg","Magnesium","mg",350,"min"],["zn","Zink","mg",14,"min"],["fe","Eisen","mg",11,"min"],["ca","Calcium","mg",1000,"min"],["k","Kalium","mg",4000,"min"],["jod","Jod","µg",200,"min"]];
+const VIT_FOCUS=["d","c","fol","b12","mg","zn","fe","ca"];
 const VIT_DEFAULT=Object.fromEntries(VITS.map(v=>[v[0],v[3]]));
 const vitTarget=k=>{ const t=settings.vitTargets?.[k]; return t==null?VIT_DEFAULT[k]:+t||0; };
 const hasVit=v=>v&&typeof v==="object"&&Object.keys(v).some(k=>v[k]!=null&&!isNaN(+v[k]));
@@ -67,7 +69,7 @@ const vitRound=v=>hasVit(v)?Object.fromEntries(Object.entries(v).filter(([,x])=>
 const mealVit=m=>hasVit(m.vit)?m.vit:(m.items||[]).reduce((a,i)=>vitAdd(a,i.vit),null);
 const vitTotals=d=>(d.meals||[]).reduce((a,m)=>vitAdd(a,mealVit(m)),{});
 /* OFF liefert Vitamine in g pro 100 g */
-const OFF_VIT={a:["vitamin-a_100g",1e6],d:["vitamin-d_100g",1e6],e:["vitamin-e_100g",1e3],c:["vitamin-c_100g",1e3],b1:["vitamin-b1_100g",1e3],b2:["vitamin-b2_100g",1e3],b6:["vitamin-b6_100g",1e3],b12:["vitamin-b12_100g",1e6],fol:["vitamin-b9_100g",1e6]};
+const OFF_VIT={a:["vitamin-a_100g",1e6],d:["vitamin-d_100g",1e6],e:["vitamin-e_100g",1e3],c:["vitamin-c_100g",1e3],b1:["vitamin-b1_100g",1e3],b2:["vitamin-b2_100g",1e3],b6:["vitamin-b6_100g",1e3],b12:["vitamin-b12_100g",1e6],fol:["vitamin-b9_100g",1e6],mg:["magnesium_100g",1e3],zn:["zinc_100g",1e3],fe:["iron_100g",1e3],ca:["calcium_100g",1e3],k:["potassium_100g",1e3],jod:["iodine_100g",1e6]};
 const offVit=n=>{ const o={}; for(const [k,[f,m]] of Object.entries(OFF_VIT)){ let x=n[f]; if(k==="fol"&&x==null) x=n["folates_100g"]; if(x!=null&&x!==""&&!isNaN(+x)) o[k]=+x*m; } return hasVit(o)?o:null; };
 const totals = d => (d.meals||[]).reduce((a,m)=>({kcal:a.kcal+(+m.kcal||0),carbs:a.carbs+(+m.carbs||0),protein:a.protein+(+m.protein||0),fat:a.fat+(+m.fat||0),fiber:a.fiber+(+m.fiber||0)}),{kcal:0,carbs:0,protein:0,fat:0,fiber:0});
 
@@ -224,14 +226,16 @@ function vitCard(d){
   const t=vitTotals(d), all=d.meals.length, known=d.meals.filter(m=>hasVit(mealVit(m))).length;
   const fmt=x=>x===0?"0":de(x,x<1?2:x<10?1:0);
   const focus=settings.vitFocus?.length?settings.vitFocus:VIT_FOCUS, list=vitAll?VITS:VITS.filter(([k])=>focus.includes(k));
-  const rows=list.map(([k,l,u])=>{ const tg=vitTarget(k), v=t[k]||0, has=t[k]!=null, p=tg?Math.min(1,v/tg):0, pc=tg?Math.round(v/tg*100):0;
+  const row=([k,l,u])=>{ const tg=vitTarget(k), v=t[k]||0, has=t[k]!=null, p=tg?Math.min(1,v/tg):0, pc=tg?Math.round(v/tg*100):0;
     return `<div class="vit"><div class="row between"><span>${l.replace("Vitamin ","Vit. ")}</span><span class="num">${has?`<b>${fmt(v)}</b>`:"–"}${tg?` / ${de(tg)} ${u}`:` ${u}`}</span></div>
-      ${tg?`<div class="prog vitbar${pc>=100?" full":""}"><i style="width:${p*100}%"></i></div>`:""}</div>`; }).join("");
+      ${tg?`<div class="prog vitbar${pc>=100?" full":""}"><i style="width:${p*100}%"></i></div>`:""}</div>`; };
+  const gv=list.filter(x=>x[4]!=="min"), gm=list.filter(x=>x[4]==="min");
+  const rows=(gv.length?`<div class="vitgh">Vitamine</div>${gv.map(row).join("")}`:"")+(gm.length?`<div class="vitgh">Mineralstoffe</div>${gm.map(row).join("")}`:"");
   const reached=list.filter(([k])=>vitTarget(k)&&(t[k]||0)>=vitTarget(k)).length, withT=list.filter(([k])=>vitTarget(k)).length;
-  return `<section class="card"><details class="vitbox"${vitOpen?" open":""}><summary class="row between"><h2>Vitamine</h2><span class="hint">${known?`${reached} von ${withT} Zielen erreicht`:"noch keine Angaben"} <span class="chev">▾</span></span></summary>
+  return `<section class="card"><details class="vitbox"${vitOpen?" open":""}><summary class="row between"><h2>Mikronährstoffe</h2><span class="hint">${known?`${reached} von ${withT} Zielen erreicht`:"noch keine Angaben"} <span class="chev">▾</span></span></summary>
     <div class="vitgrid">${rows}</div>
-    <button class="btn ghost sm" data-act="vitall" style="margin:2px 0 6px">${vitAll?"Nur die wichtigsten zeigen":`Alle ${VITS.length} Vitamine zeigen`}</button>
-    ${all&&known<all?`<p class="hint">Bei ${all-known} von ${all} Mahlzeiten fehlen Vitaminangaben – die Werte oben sind deshalb zu niedrig.</p>`:""}
+    <button class="btn ghost sm" data-act="vitall" style="margin:2px 0 6px">${vitAll?"Nur die wichtigsten zeigen":`Alle ${VITS.length} anzeigen`}</button>
+    ${all&&known<all?`<p class="hint">Bei ${all-known} von ${all} Mahlzeiten fehlen Angaben – die Werte oben sind deshalb zu niedrig.</p>`:""}
     <p class="hint">Ziele: DGE/ÖGE-Referenzwerte für Männer, in den Einstellungen änderbar. Vitamin D bildet der Körper zusätzlich über Sonnenlicht.</p></details></section>`;
 }
 function viewHeute(){
@@ -906,7 +910,7 @@ function settingsSheet(){
   openSheet(`<div class="row between"><h2>Einstellungen</h2><button class="x" data-close>×</button></div>
     <div class="card"><h3>Eiweißziel</h3><div class="row"><input class="field num" id="st-prot" type="number" inputmode="numeric" value="${s.proteinTarget||""}" placeholder="aus"><span class="muted">g pro Tag</span></div><p class="hint">Leer lassen, um den Ring auszublenden.</p></div>
     <div class="card"><h3>Ballaststoffziel</h3><div class="row"><input class="field num" id="st-fib" type="number" inputmode="numeric" value="${s.fiberTarget??30}" placeholder="aus"><span class="muted">g pro Tag</span></div><p class="hint">Die DGE empfiehlt Erwachsenen mindestens 30 g pro Tag. Leer lassen, um den Balken auszublenden.</p></div>
-    <div class="card"><h3>Vitamin-Tagesziele</h3><div class="vitset">${VITS.map(([k,l,u])=>`<label class="nf"><span>${l} (${u})</span><input class="field num" data-vt="${k}" type="number" inputmode="decimal" step="any" value="${s.vitTargets?.[k]??VIT_DEFAULT[k]}" placeholder="aus"></label>`).join("")}</div><p class="hint">Voreingestellt: DGE/ÖGE-Referenzwerte für erwachsene Männer. Feld leeren blendet den Balken aus.</p></div>
+    <div class="card"><h3>Mikronährstoff-Tagesziele</h3><div class="vitset">${VITS.map(([k,l,u])=>`<label class="nf"><span>${l} (${u})</span><input class="field num" data-vt="${k}" type="number" inputmode="decimal" step="any" value="${s.vitTargets?.[k]??VIT_DEFAULT[k]}" placeholder="aus"></label>`).join("")}</div><p class="hint">Voreingestellt: DGE/ÖGE-Referenzwerte für erwachsene Männer (Zink bei mittlerer Phytatzufuhr). Feld leeren blendet den Balken aus.</p></div>
     <div class="card"><h3>Ernährungs-Schnitt</h3><label class="lbl" for="st-ts">Zählt ab</label><input class="field num" id="st-ts" type="date" value="${s.trackStart||"2026-10-19"}"><p class="hint">Durchschnitte nutzen nur abgeschlossene Tage ab diesem Datum. Der laufende Tag zählt erst ab morgen mit.</p></div>
     <div class="card"><h3>Ziel-Countdown</h3><div class="grid2"><div><label class="lbl" for="st-gd">Datum</label><input class="field num" id="st-gd" type="date" value="${s.goalDate||"2027-01-31"}"></div><div><label class="lbl" for="st-gl">Bezeichnung</label><input class="field" id="st-gl" value="${esc(s.goalLabel||"")}" placeholder="z. B. Ende Auslandssemester"></div></div></div>
     <div class="card"><h3>Musik</h3>
