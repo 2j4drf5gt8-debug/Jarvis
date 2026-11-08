@@ -448,6 +448,18 @@ nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;top:-
 .fib .num b{font-family:var(--display);font-size:1.25rem;color:var(--fg)}
 .fib .num{color:var(--muted);font-size:.85rem}
 .fibbar i{background:linear-gradient(90deg,#9CA6AF,#E6E9EC);box-shadow:none}
+.vitbox summary{list-style:none;cursor:pointer;align-items:center}
+.vitbox summary::-webkit-details-marker{display:none}
+.vitbox summary h2{margin:0}
+.vitbox .chev{display:inline-block;transition:transform .2s}
+.vitbox[open] .chev{transform:rotate(180deg)}
+.vitgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin:12px 0 4px}
+.vit{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:.85rem}
+.vit .num{color:var(--muted);font-size:.78rem;white-space:nowrap}
+.vit .num b{color:var(--fg);font-size:.95rem}
+.vitbar i{background:linear-gradient(90deg,#6E7A86,#C9D1D8);box-shadow:none}
+.vitbar.full i{background:var(--accent)}
+.vitset{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 /* v30: Final-Check */
 :root{--ease-out:cubic-bezier(.23,1,.32,1)}
 .toast:not([hidden]){animation:toastin .2s var(--ease-out)}
@@ -548,7 +560,7 @@ body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
   </div>
 
   <main id="view"></main>
-  <div class="status"><span id="status">Starte …</span> · Version 33</div>
+  <div class="status"><span id="status">Starte …</span> · Version 34</div>
 </div>
 
 <button class="sesspill" id="sesspill" hidden aria-label="Zum laufenden Training"><span class="dotlive"></span><span id="sesspilltime">0:00</span> Training läuft</button>

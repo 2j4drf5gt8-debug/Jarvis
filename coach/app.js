@@ -54,6 +54,20 @@ const getDay = date => { const d=structuredClone(days.get(date)||emptyDay(date))
 const saveDay = d => { days.set(d.date,d); render(); return write("days/"+d.date,d); };
 const saveSettings = s => { settings=s; render(); return write("settings/main",s); };
 const sorted = () => [...days.values()].sort((a,b)=>a.date<b.date?-1:1);
+/* Vitamine: Referenzwerte DGE/ÖGE 2024 für Männer (Altersgruppe 25–<51; B6 laut DGE 1,6 mg für erwachsene Männer).
+   Datenformat: meal.vit / item.vit / per100.vit = {a:µg,d:µg,e:mg,c:mg,b1:mg,b2:mg,b6:mg,b12:µg,fol:µg} – fehlender Schlüssel = unbekannt */
+const VITS=[["a","Vitamin A","µg",850],["d","Vitamin D","µg",20],["e","Vitamin E","mg",14],["c","Vitamin C","mg",110],["b1","Vitamin B1","mg",1.2],["b2","Vitamin B2","mg",1.4],["b6","Vitamin B6","mg",1.6],["b12","Vitamin B12","µg",4],["fol","Folat","µg",300]];
+const VIT_DEFAULT=Object.fromEntries(VITS.map(v=>[v[0],v[3]]));
+const vitTarget=k=>{ const t=settings.vitTargets?.[k]; return t==null?VIT_DEFAULT[k]:+t||0; };
+const hasVit=v=>v&&typeof v==="object"&&Object.keys(v).some(k=>v[k]!=null&&!isNaN(+v[k]));
+const vitScale=(v,f)=>hasVit(v)?Object.fromEntries(Object.entries(v).filter(([,x])=>x!=null&&!isNaN(+x)).map(([k,x])=>[k,+x*f])):null;
+const vitAdd=(a,b)=>{ if(!hasVit(b)) return a; const o={...(a||{})}; for(const [k,x] of Object.entries(b)) if(x!=null&&!isNaN(+x)) o[k]=(o[k]||0)+(+x); return o; };
+const vitRound=v=>hasVit(v)?Object.fromEntries(Object.entries(v).filter(([,x])=>x!=null&&!isNaN(+x)).map(([k,x])=>[k,Math.round(+x*100)/100])):null;
+const mealVit=m=>hasVit(m.vit)?m.vit:(m.items||[]).reduce((a,i)=>vitAdd(a,i.vit),null);
+const vitTotals=d=>(d.meals||[]).reduce((a,m)=>vitAdd(a,mealVit(m)),{});
+/* OFF liefert Vitamine in g pro 100 g */
+const OFF_VIT={a:["vitamin-a_100g",1e6],d:["vitamin-d_100g",1e6],e:["vitamin-e_100g",1e3],c:["vitamin-c_100g",1e3],b1:["vitamin-b1_100g",1e3],b2:["vitamin-b2_100g",1e3],b6:["vitamin-b6_100g",1e3],b12:["vitamin-b12_100g",1e6],fol:["vitamin-b9_100g",1e6]};
+const offVit=n=>{ const o={}; for(const [k,[f,m]] of Object.entries(OFF_VIT)){ let x=n[f]; if(k==="fol"&&x==null) x=n["folates_100g"]; if(x!=null&&x!==""&&!isNaN(+x)) o[k]=+x*m; } return hasVit(o)?o:null; };
 const totals = d => (d.meals||[]).reduce((a,m)=>({kcal:a.kcal+(+m.kcal||0),carbs:a.carbs+(+m.carbs||0),protein:a.protein+(+m.protein||0),fat:a.fat+(+m.fat||0),fiber:a.fiber+(+m.fiber||0)}),{kcal:0,carbs:0,protein:0,fat:0,fiber:0});
 
 /* ---------------- ui helpers ---------------- */
@@ -201,6 +215,20 @@ function render(){
   if(tab==="koerper") loadPhotos();
 }
 
+let vitOpen=(()=>{ try{ return localStorage.getItem("jv-vitopen")==="1"; }catch(e){ return false; } })();
+document.addEventListener("toggle",e=>{ if(e.target.classList?.contains("vitbox")){ vitOpen=e.target.open; try{ localStorage.setItem("jv-vitopen",vitOpen?"1":"0"); }catch(_){} } },true);
+function vitCard(d){
+  const t=vitTotals(d), all=d.meals.length, known=d.meals.filter(m=>hasVit(mealVit(m))).length;
+  const fmt=x=>x===0?"0":de(x,x<1?2:x<10?1:0);
+  const rows=VITS.map(([k,l,u])=>{ const tg=vitTarget(k), v=t[k]||0, has=t[k]!=null, p=tg?Math.min(1,v/tg):0, pc=tg?Math.round(v/tg*100):0;
+    return `<div class="vit"><div class="row between"><span>${l.replace("Vitamin ","Vit. ")}</span><span class="num">${has?`<b>${fmt(v)}</b>`:"–"}${tg?` / ${de(tg)} ${u}`:` ${u}`}</span></div>
+      ${tg?`<div class="prog vitbar${pc>=100?" full":""}"><i style="width:${p*100}%"></i></div>`:""}</div>`; }).join("");
+  const reached=VITS.filter(([k])=>vitTarget(k)&&(t[k]||0)>=vitTarget(k)).length, withT=VITS.filter(([k])=>vitTarget(k)).length;
+  return `<section class="card"><details class="vitbox"${vitOpen?" open":""}><summary class="row between"><h2>Vitamine</h2><span class="hint">${known?`${reached} von ${withT} Zielen erreicht`:"noch keine Angaben"} <span class="chev">▾</span></span></summary>
+    <div class="vitgrid">${rows}</div>
+    ${all&&known<all?`<p class="hint">Bei ${all-known} von ${all} Mahlzeiten fehlen Vitaminangaben – die Werte oben sind deshalb zu niedrig.</p>`:""}
+    <p class="hint">Ziele: DGE/ÖGE-Referenzwerte für Männer, in den Einstellungen änderbar. Vitamin D bildet der Körper zusätzlich über Sonnenlicht.</p></details></section>`;
+}
 function viewHeute(){
   const d=getDay(cur), t=totals(d), due=nextDue(), pt=+settings.proteinTarget||0;
   const pct=pt?Math.min(1,t.protein/pt):0, C=2*Math.PI*50;
@@ -243,6 +271,7 @@ function viewHeute(){
         ${ft?`<p class="hint">${t.fiber>=ft?"Ballaststoffziel erreicht.":`Noch ${de(ft-t.fiber)} g bis zum Ziel.`}</p>`:""}
         ${all&&known<all?`<p class="hint">Bei ${all-known} von ${all} Mahlzeiten fehlen Ballaststoff-Angaben – tippe sie an, um sie zu ergänzen.</p>`:""}</div>`; })()}
   </section>
+  ${vitCard(d)}
 
   <section class="card">
     <div class="row between"><h2>Essen</h2><div class="row" style="gap:6px"><button class="btn sm" data-act="addfood">${ICON.plus}</button>${settings.aiPhoto?`<button class="btn pri sm" data-act="photofood">${ICON.camera}Foto</button>`:`<a class="btn pri sm" href="https://claude.ai/artifact/VZ8JNe1oJvXiYRyhixfAWD" target="_blank" rel="noopener">${ICON.camera}Foto</a>`}</div></div>
@@ -576,8 +605,8 @@ function stopScan(){ try{scanReader&&scanReader.reset();}catch(e){} scanReader=n
 const rd1=v=>Math.round((+v||0)*10)/10;
 function addMeal(m){ const d=getDay(cur);
   const e={name:m.name,kcal:r(m.kcal),carbs:rd1(m.carbs),protein:rd1(m.protein),fat:rd1(m.fat),time:nowTime()}; if(m.fiber!=null&&!isNaN(+m.fiber)) e.fiber=rd1(m.fiber);
-  if(m.per100) e.per100=m.per100; if(m.grams) e.grams=r(m.grams); if(m.base) e.base=m.base;
-  if(m.items?.length) e.items=m.items.map(i=>({name:i.name,grams:r(i.grams),kcal:r(i.kcal),carbs:rd1(i.carbs),protein:rd1(i.protein),fat:rd1(i.fat),...(i.fiber!=null?{fiber:rd1(i.fiber)}:{})}));
+  if(m.per100) e.per100=m.per100; if(m.grams) e.grams=r(m.grams); if(m.base) e.base=m.base; if(hasVit(m.vit)) e.vit=vitRound(m.vit);
+  if(m.items?.length){ e.items=m.items.map(i=>({name:i.name,grams:r(i.grams),kcal:r(i.kcal),carbs:rd1(i.carbs),protein:rd1(i.protein),fat:rd1(i.fat),...(i.fiber!=null?{fiber:rd1(i.fiber)}:{}),...(hasVit(i.vit)?{vit:vitRound(i.vit)}:{})})); if(!e.vit){ const v=e.items.reduce((a,i)=>vitAdd(a,i.vit),null); if(hasVit(v)) e.vit=vitRound(v); } }
   d.meals.push(e); saveDay(d); toast(`${m.name.slice(0,40)} eingetragen`); }
 /* Grundnahrungsmittel: Durchschnittswerte pro 100 g (Richtwerte, v. a. nach USDA/üblichen Packungsangaben) */
 const BASICS=[
@@ -634,8 +663,8 @@ async function searchProducts(q){
 }
 function offToItem(p){ const n=p.nutriments||{}; if(n["energy-kcal_100g"]==null) return null;
   return {code:p.code,name:p.product_name_de||p.product_name||p.product_name_es||"Produkt",brand:String(p.brands||"").split(",")[0].trim(),
-    kcal:+n["energy-kcal_100g"]||0,carbs:+n.carbohydrates_100g||0,protein:+n.proteins_100g||0,fat:+n.fat_100g||0,fiber:n.fiber_100g!=null?+n.fiber_100g:null,serving_g:+p.serving_quantity||null,serving:p.serving_size||""}; }
-const itemToFood=it=>({name:[it.name,it.brand?`(${it.brand})`:""].join(" ").trim(),per100:{kcal:it.kcal,carbs:it.carbs,protein:it.protein,fat:it.fat,...(it.fiber!=null?{fiber:it.fiber}:{})},serving_g:it.serving_g,serving:it.serving});
+    kcal:+n["energy-kcal_100g"]||0,carbs:+n.carbohydrates_100g||0,protein:+n.proteins_100g||0,fat:+n.fat_100g||0,fiber:n.fiber_100g!=null?+n.fiber_100g:null,vit:offVit(n),serving_g:+p.serving_quantity||null,serving:p.serving_size||""}; }
+const itemToFood=it=>({name:[it.name,it.brand?`(${it.brand})`:""].join(" ").trim(),per100:{kcal:it.kcal,carbs:it.carbs,protein:it.protein,fat:it.fat,...(it.fiber!=null?{fiber:it.fiber}:{}),...(hasVit(it.vit)?{vit:it.vit}:{})},serving_g:it.serving_g,serving:it.serving});
 function searchMode(body){
   body.innerHTML=`<form class="row" id="sform"><input class="field" id="sq" type="search" enterkeyhint="search" placeholder="z. B. Skyr, Hähnchenbrust, avena" autocomplete="off"><button class="btn pri" type="submit">Suchen</button></form><div id="sres"></div>`;
   const res=body.querySelector("#sres"), inp=body.querySelector("#sq");
@@ -780,8 +809,8 @@ function portionSheet(food){
     <div class="stat" id="psum"></div>
     <label class="row"><input type="checkbox" id="p-fav"> <span>Diese Portion als Favorit speichern</span></label>
     <button class="btn pri block" id="padd">Eintragen</button>`, sh=>{
-      const calc=()=>{ const g=+sh.querySelector("#grams").value||0, f=g/100; return {name:`${food.name}, ${r(g)} g`,base:food.name,grams:g,per100:food.per100,kcal:food.per100.kcal*f,carbs:food.per100.carbs*f,protein:food.per100.protein*f,fat:food.per100.fat*f,...(food.per100.fiber!=null?{fiber:food.per100.fiber*f}:{})}; };
-      const paint=()=>{ const m=calc(); sh.querySelector("#psum").innerHTML=`<span class="lbl">Ergibt</span><b class="num">${r(m.kcal)} kcal</b><span class="d muted">KH ${de(m.carbs)} g · E ${de(m.protein)} g · F ${de(m.fat)} g${m.fiber!=null?` · Ballastst. ${de(m.fiber)} g`:""}</span>`; };
+      const calc=()=>{ const g=+sh.querySelector("#grams").value||0, f=g/100; return {name:`${food.name}, ${r(g)} g`,base:food.name,grams:g,per100:food.per100,kcal:food.per100.kcal*f,carbs:food.per100.carbs*f,protein:food.per100.protein*f,fat:food.per100.fat*f,...(food.per100.fiber!=null?{fiber:food.per100.fiber*f}:{}),...(hasVit(food.per100.vit)?{vit:vitScale(food.per100.vit,f)}:{})}; };
+      const paint=()=>{ const m=calc(); sh.querySelector("#psum").innerHTML=`<span class="lbl">Ergibt</span><b class="num">${r(m.kcal)} kcal</b><span class="d muted">KH ${de(m.carbs)} g · E ${de(m.protein)} g · F ${de(m.fat)} g${m.fiber!=null?` · Ballastst. ${de(m.fiber)} g`:""}${hasVit(m.vit)&&m.vit.c!=null?` · Vit. C ${de(m.vit.c,0)} mg`:""}</span>`; };
       sh.querySelector("#grams").oninput=paint; paint();
       sh.addEventListener("click",e=>{ if(e.target.closest("[data-close]")) closeSheet(); const g=e.target.closest("[data-g]"); if(g){ sh.querySelector("#grams").value=g.dataset.g; paint(); } });
       sh.querySelector("#padd").onclick=()=>{ const m=calc(); if(sh.querySelector("#p-fav").checked){ const s=structuredClone(settings); s.favorites=[...(s.favorites||[]),{...m,kcal:r(m.kcal)}]; saveSettings(s);} addMeal(m); closeSheet(); };
@@ -790,7 +819,7 @@ function portionSheet(food){
 /* ---------------- Mahlzeit bearbeiten ---------------- */
 function mealSheet(idx){
   const d=getDay(cur); const orig=d.meals[idx]; if(!orig) return;
-  const m=structuredClone(orig);
+  const m=structuredClone(orig); let vmul=1;
   const items=(m.items||[]).map(i=>({...i,b:{...i}}));
   const hasItems=items.length>0, hasPer100=!hasItems&&m.per100&&m.grams;
   const sumItems=()=>{ const t=items.reduce((a,i)=>({kcal:a.kcal+i.kcal,carbs:a.carbs+i.carbs,protein:a.protein+i.protein,fat:a.fat+i.fat,fiber:a.fiber+(+i.fiber||0)}),{kcal:0,carbs:0,protein:0,fat:0,fiber:0}); if(!items.some(i=>i.fiber!=null)) t.fiber=null; return t; };
@@ -813,7 +842,7 @@ function mealSheet(idx){
       const paintItems=()=>{ if(!hasItems) return;
         $e("e-items").innerHTML=items.map((i,k)=>`<div class="ai-item"><div style="min-width:0"><div style="font-weight:600">${esc(i.name)}</div><div class="mm">${r(i.kcal)} kcal · KH ${r(i.carbs)} · E ${r(i.protein)} · F ${r(i.fat)}</div></div>
           <div class="row" style="gap:4px"><input class="field num" data-ig="${k}" type="number" inputmode="decimal" value="${r(i.grams)}"><span class="muted">g</span></div><button class="x" data-irm="${k}" aria-label="Bestandteil entfernen">×</button></div>`).join("")||'<p class="hint">Keine Bestandteile mehr.</p>'; };
-      const scaleItem=(i,g)=>{ const f=i.b.grams?g/i.b.grams:0; Object.assign(i,{grams:g,kcal:i.b.kcal*f,carbs:i.b.carbs*f,protein:i.b.protein*f,fat:i.b.fat*f,...(i.b.fiber!=null?{fiber:i.b.fiber*f}:{})}); };
+      const scaleItem=(i,g)=>{ const f=i.b.grams?g/i.b.grams:0; Object.assign(i,{grams:g,kcal:i.b.kcal*f,carbs:i.b.carbs*f,protein:i.b.protein*f,fat:i.b.fat*f,...(i.b.fiber!=null?{fiber:i.b.fiber*f}:{}),...(hasVit(i.b.vit)?{vit:vitScale(i.b.vit,f)}:{})}); };
       paintItems(); setVals(m);
       ["e-kcal","e-c","e-p","e-f"].forEach(id=>$e(id).oninput=check);
       if(hasPer100) $e("e-grams").oninput=()=>{ const f=(+$e("e-grams").value||0)/100; setVals({kcal:m.per100.kcal*f,carbs:m.per100.carbs*f,protein:m.per100.protein*f,fat:m.per100.fat*f,fiber:m.per100.fiber!=null?m.per100.fiber*f:vals().fiber}); };
@@ -824,12 +853,15 @@ function mealSheet(idx){
         const mu=e.target.closest("[data-mul]"); if(mu){ const f=+mu.dataset.mul;
           if(hasItems){ items.forEach(i=>scaleItem(i,i.grams*f)); paintItems(); setVals(sumItems()); }
           else if(hasPer100){ $e("e-grams").value=r((+$e("e-grams").value||0)*f); $e("e-grams").oninput(); }
-          else { const v=vals(); setVals({kcal:v.kcal*f,carbs:v.carbs*f,protein:v.protein*f,fat:v.fat*f,fiber:v.fiber!=null?v.fiber*f:null}); }
+          else { vmul*=f; const v=vals(); setVals({kcal:v.kcal*f,carbs:v.carbs*f,protein:v.protein*f,fat:v.fat*f,fiber:v.fiber!=null?v.fiber*f:null}); }
           toast(`Portion ${mu.textContent}`); } });
       const build=()=>{ const v=vals(); let name=$e("e-name").value.trim()||"Mahlzeit";
         const out={...orig,name,time:$e("e-time").value||orig.time||"",kcal:r(v.kcal),carbs:rd1(v.carbs),protein:rd1(v.protein),fat:rd1(v.fat)}; if(v.fiber!=null) out.fiber=rd1(v.fiber); else delete out.fiber;
-        if(hasPer100){ const g=+$e("e-grams").value||0; out.grams=r(g); if(name===orig.name&&orig.base) out.name=`${orig.base}, ${r(g)} g`; }
-        if(hasItems) out.items=items.map(({b,...i})=>({...i,grams:r(i.grams),kcal:r(i.kcal),carbs:rd1(i.carbs),protein:rd1(i.protein),fat:rd1(i.fat),...(i.fiber!=null?{fiber:rd1(i.fiber)}:{})}));
+        if(hasPer100){ const g=+$e("e-grams").value||0; out.grams=r(g); if(name===orig.name&&orig.base) out.name=`${orig.base}, ${r(g)} g`;
+          if(hasVit(m.per100.vit)) out.vit=vitRound(vitScale(m.per100.vit,g/100)); else if(hasVit(orig.vit)&&orig.grams) out.vit=vitRound(vitScale(orig.vit,g/orig.grams)); }
+        else if(!hasItems&&hasVit(orig.vit)&&vmul!==1) out.vit=vitRound(vitScale(orig.vit,vmul));
+        if(hasItems){ out.items=items.map(({b,...i})=>({...i,grams:r(i.grams),kcal:r(i.kcal),carbs:rd1(i.carbs),protein:rd1(i.protein),fat:rd1(i.fat),...(i.fiber!=null?{fiber:rd1(i.fiber)}:{}),...(hasVit(i.vit)?{vit:vitRound(i.vit)}:{})}));
+          if(items.some(i=>hasVit(i.vit))) out.vit=vitRound(out.items.reduce((a,i)=>vitAdd(a,i.vit),null)); else if(hasVit(orig.vit)&&vmul!==1) out.vit=vitRound(vitScale(orig.vit,vmul)); }
         return out; };
       $e("e-save").onclick=()=>{ const dd=getDay(cur); dd.meals[idx]=build(); saveDay(dd); closeSheet(); toast("Gespeichert"); };
       $e("e-dup").onclick=()=>{ const n=build(); delete n.time; addMeal(n); closeSheet(); };
@@ -869,6 +901,7 @@ function settingsSheet(){
   openSheet(`<div class="row between"><h2>Einstellungen</h2><button class="x" data-close>×</button></div>
     <div class="card"><h3>Eiweißziel</h3><div class="row"><input class="field num" id="st-prot" type="number" inputmode="numeric" value="${s.proteinTarget||""}" placeholder="aus"><span class="muted">g pro Tag</span></div><p class="hint">Leer lassen, um den Ring auszublenden.</p></div>
     <div class="card"><h3>Ballaststoffziel</h3><div class="row"><input class="field num" id="st-fib" type="number" inputmode="numeric" value="${s.fiberTarget??30}" placeholder="aus"><span class="muted">g pro Tag</span></div><p class="hint">Die DGE empfiehlt Erwachsenen mindestens 30 g pro Tag. Leer lassen, um den Balken auszublenden.</p></div>
+    <div class="card"><h3>Vitamin-Tagesziele</h3><div class="vitset">${VITS.map(([k,l,u])=>`<label class="nf"><span>${l} (${u})</span><input class="field num" data-vt="${k}" type="number" inputmode="decimal" step="any" value="${s.vitTargets?.[k]??VIT_DEFAULT[k]}" placeholder="aus"></label>`).join("")}</div><p class="hint">Voreingestellt: DGE/ÖGE-Referenzwerte für erwachsene Männer. Feld leeren blendet den Balken aus.</p></div>
     <div class="card"><h3>Ernährungs-Schnitt</h3><label class="lbl" for="st-ts">Zählt ab</label><input class="field num" id="st-ts" type="date" value="${s.trackStart||"2026-10-19"}"><p class="hint">Durchschnitte nutzen nur abgeschlossene Tage ab diesem Datum. Der laufende Tag zählt erst ab morgen mit.</p></div>
     <div class="card"><h3>Ziel-Countdown</h3><div class="grid2"><div><label class="lbl" for="st-gd">Datum</label><input class="field num" id="st-gd" type="date" value="${s.goalDate||"2027-01-31"}"></div><div><label class="lbl" for="st-gl">Bezeichnung</label><input class="field" id="st-gl" value="${esc(s.goalLabel||"")}" placeholder="z. B. Ende Auslandssemester"></div></div></div>
     <div class="card"><h3>Musik</h3>
@@ -900,6 +933,7 @@ function settingsSheet(){
       sh.querySelector("#st-save").onclick=()=>{
         const n=structuredClone(settings);
         n.proteinTarget = +sh.querySelector("#st-prot").value || 0; n.fiberTarget = +sh.querySelector("#st-fib").value || 0;
+        n.vitTargets=Object.fromEntries([...sh.querySelectorAll("[data-vt]")].map(i=>[i.dataset.vt,i.value===""?0:(+i.value.replace(",",".")||0)]));
         n.reminders={kreatin:{on:sh.querySelector("#st-ko").checked,time:sh.querySelector("#st-kt").value||"21:00"},training:{on:sh.querySelector("#st-to").checked,time:sh.querySelector("#st-tt").value||"17:00"}};
         n.supplements=sh.querySelector("#st-supps").value.split("\n").map(x=>x.trim()).filter(Boolean);
         n.restSeconds=+sh.querySelector("#st-rest").value||150;
@@ -1180,7 +1214,7 @@ $("view").addEventListener("click",e=>{
   const em=t.closest("[data-edit-meal]"); if(em){ mealSheet(+em.dataset.editMeal); return; }
   const dm=t.closest("[data-del-meal]"); if(dm){ const d=getDay(cur); d.meals.splice(+dm.dataset.delMeal,1); saveDay(d); return; }
   const fv=t.closest("[data-fav]"); if(fv){ const d=getDay(cur); const m=d.meals[+fv.dataset.fav]; const s=structuredClone(settings); s.favorites=s.favorites||[];
-    const i=s.favorites.findIndex(f=>f.name===m.name); if(i>=0){ s.favorites.splice(i,1); toast("Aus Favoriten entfernt"); } else { s.favorites.push({name:m.name,kcal:m.kcal,carbs:m.carbs,protein:m.protein,fat:m.fat,...(m.fiber!=null?{fiber:m.fiber}:{})}); toast("Als Favorit gespeichert"); } saveSettings(s); return; }
+    const i=s.favorites.findIndex(f=>f.name===m.name); if(i>=0){ s.favorites.splice(i,1); toast("Aus Favoriten entfernt"); } else { s.favorites.push({name:m.name,kcal:m.kcal,carbs:m.carbs,protein:m.protein,fat:m.fat,...(m.fiber!=null?{fiber:m.fiber}:{}),...(hasVit(mealVit(m))?{vit:mealVit(m)}:{})}); toast("Als Favorit gespeichert"); } saveSettings(s); return; }
   const sp=t.closest("[data-supp]"); if(sp){ const d=getDay(cur); const k=sp.dataset.supp; d.supps[k]=!d.supps[k]; saveDay(d); return; }
   const un=t.closest("[data-unit]"); if(un){ unit=un.dataset.unit; unitManual=true; render(); return; }
   const ok=t.closest("[data-set]"); if(ok){ logSet(ok.dataset.set); return; }
