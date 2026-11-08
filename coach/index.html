@@ -227,7 +227,6 @@ a.btn.pri{color:var(--accent-ink)}
 /* ---- Nachtritter-Look: Panzerkanten, Metall, Regen, Suchscheinwerfer ---- */
 body::after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.07;
   background-image:repeating-linear-gradient(105deg,transparent 0 22px,rgba(200,215,230,.9) 22px 23px,transparent 23px 61px);background-size:200px 200px;animation:rain 1.1s linear infinite}
-@keyframes rain{to{background-position:-60px 200px}}
 .wrap{position:relative;z-index:1}
 .card{border-radius:4px;clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,14px 100%,0 calc(100% - 14px));
   background:linear-gradient(180deg,#151920,#0E1115);border-color:#232931}
@@ -287,7 +286,6 @@ nav.tabs button[aria-selected="true"] svg{filter:drop-shadow(0 0 6px rgba(242,19
 .cb-box span{display:block;margin-top:4px;font-size:.85rem;color:var(--fg2)}
 .celeb.pr .cb-box{border-color:rgba(255,216,74,.8)}
 .celeb.pr .cb-box b{color:var(--pr);text-shadow:0 0 26px rgba(255,216,74,.7);font-size:2.6rem;text-transform:uppercase}
-.cb-bat{display:block;width:90px;margin:0 auto 6px;fill:#0A0C0F;stroke:var(--pr);stroke-width:1;filter:drop-shadow(0 0 10px rgba(255,216,74,.7))}
 .cb-ring{position:absolute;width:120px;height:120px;border-radius:50%;border:3px solid var(--good);animation:cbring .8s ease-out both;opacity:0}
 .celeb.pr .cb-ring{border-color:var(--pr)}
 .cb-sparks{position:absolute;width:0;height:0}
@@ -299,84 +297,18 @@ nav.tabs button[aria-selected="true"] svg{filter:drop-shadow(0 0 6px rgba(242,19
 .celeb.out{animation:igout .4s ease forwards}
 .celeb.reduce *{animation:none!important}
 /* Jarvis Maskottchen */
-.jcard{flex-direction:row;align-items:center;gap:12px;padding:12px 14px;cursor:pointer}
-.jav{flex:none;width:92px;display:grid;place-items:center}
-.jbub{position:relative;flex:1;min-width:0;background:var(--raise);border:1px solid var(--line2);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
-.jbub::before{content:"";position:absolute;left:-7px;top:22px;width:12px;height:12px;background:var(--raise);border-left:1px solid var(--line2);border-bottom:1px solid var(--line2);transform:rotate(45deg)}
-.jbub p{margin:0;font-size:.95rem;line-height:1.35}
-.jbub .btn{align-self:flex-start}
-.bat{overflow:visible}
-.bat .lid,.bat .mouth,.bat .brow{fill:none;stroke:#E9ECEF;stroke-width:2.2;stroke-linecap:round}
-.bat .brow{stroke-width:2}
-.bat .body{animation:bob 2.6s ease-in-out infinite;transform-origin:60px 60px}
-.bat .wl{transform-origin:40px 54px;animation:flapL 1.6s ease-in-out infinite}
-.bat .wr{transform-origin:80px 54px;animation:flapR 1.6s ease-in-out infinite}
-.bat.excited .body{animation:hop .55s ease-in-out infinite}
-.bat.excited .wl{animation-duration:.32s}.bat.excited .wr{animation-duration:.32s}
-.bat.happy .wl,.bat.happy .wr{animation-duration:.9s}
-.bat.sad .body{animation:none;transform:translateY(3px)}
-.bat.sad .wl{animation:none;transform:rotate(28deg)}.bat.sad .wr{animation:none;transform:rotate(-28deg)}
-.bat.sad .tear{animation:tear 2.2s ease-in infinite}
-.bat.sleepy .wl{animation:none;transform:rotate(18deg)}.bat.sleepy .wr{animation:none;transform:rotate(-18deg)}
-.bat .zz{fill:#8FB8D8;font:700 12px var(--body);animation:zz 2.4s ease-in-out infinite}
-.bat .spark{animation:twinkle .8s ease-in-out infinite}
-@keyframes bob{50%{transform:translateY(-3px)}}
-@keyframes hop{50%{transform:translateY(-7px) scale(1.03)}}
-@keyframes flapL{50%{transform:rotate(-14deg)}}
-@keyframes flapR{50%{transform:rotate(14deg)}}
-@keyframes tear{0%{transform:translateY(0);opacity:0}20%{opacity:1}100%{transform:translateY(10px);opacity:0}}
-@keyframes zz{0%{opacity:0;transform:translateY(4px)}50%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
-@keyframes twinkle{50%{opacity:.3;transform:scale(.8)}}
-.jav.poke{animation:poke .5s cubic-bezier(.3,1.6,.5,1)}
-@keyframes poke{30%{transform:scale(1.15) rotate(-6deg)}60%{transform:scale(.95) rotate(4deg)}}
 .cb-jarvis{display:flex;flex-direction:column;align-items:center;margin-bottom:4px}
 .cb-say{font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--fg2);margin-top:-2px}
-@media (prefers-reduced-motion:reduce){.bat *{animation:none!important}}
 /* Jarvis im Hero */
 .hero{min-height:250px}
 .hero .sub{max-width:none;white-space:nowrap}
-.hjar{position:absolute!important;right:6px;top:4px;width:132px;height:118px;display:grid;place-items:center;cursor:pointer;z-index:2}
-.hjar .halo{position:absolute;width:96px;height:96px;border-radius:50%;top:6px;left:18px;background:radial-gradient(circle at 45% 40%,rgba(240,244,250,.95),rgba(205,214,226,.55) 45%,rgba(205,214,226,.08) 70%,transparent 72%);filter:blur(.4px)}
-.hjar .jav{position:relative;width:auto}
 .hbub{position:relative;margin-top:2px;background:rgba(10,12,16,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:9px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
 .hbub::before{content:"";position:absolute;right:58px;top:-7px;width:12px;height:12px;background:rgba(10,12,16,.72);border-left:1px solid rgba(255,255,255,.1);border-top:1px solid rgba(255,255,255,.1);transform:rotate(45deg)}
 .hbub .lbl{width:100%;color:var(--accent)!important}
 .hbub p{margin:0;flex:1;min-width:60%;font-size:.93rem;line-height:1.35;color:var(--fg)}
 .chatlink{font-size:.82rem;font-weight:700;color:var(--accent);text-decoration:none;white-space:nowrap}
-.bat3{position:relative;display:inline-block;flex:none;filter:drop-shadow(0 6px 10px rgba(0,0,0,.45))}
-.bat3 .hang,.bat3 .all{position:absolute;inset:0}
-.bat3 img{position:absolute;display:block;height:auto;max-width:none;pointer-events:none;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;transition:filter .4s}
-.bat3 .all{animation:float3 3s ease-in-out infinite;transform-origin:50% 50%}
-.bat3 .wl{transform-origin:102% 55%;animation:flapL 1.3s ease-in-out infinite}
-.bat3 .wr{transform-origin:4.4% 29.5%;animation:flapR 1.3s ease-in-out infinite}
-.bat3 .shadow{position:absolute;left:34%;width:32%;bottom:-4%;height:6%;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.5),transparent);animation:shad 3s ease-in-out infinite}
-.bat3 .perch{display:none;position:absolute;left:30%;width:40%;top:1%;height:3.4%;border-radius:6px;background:linear-gradient(#6B5A48,#2E251C);box-shadow:0 1px 2px rgba(0,0,0,.6)}
-.bat3.excited .all{animation:hop3 .6s ease-in-out infinite}
-.bat3.excited .wl,.bat3.excited .wr{animation-duration:.3s}
-.bat3.excited img{filter:brightness(1.08) saturate(1.1)}
-.bat3.happy .wl,.bat3.happy .wr{animation-duration:.85s}
-.bat3.sad .hang,.bat3.sleepy .hang{transform:rotate(180deg)}
-.bat3.sad .all,.bat3.sleepy .all{transform-origin:50% 92%;animation:sway3 3.6s ease-in-out infinite}
-.bat3.sad .wl,.bat3.sleepy .wl{animation:none;transform:rotate(48deg) scaleX(.6)}
-.bat3.sad .wr,.bat3.sleepy .wr{animation:none;transform:rotate(-48deg) scaleX(.6)}
-.bat3.sad img{filter:saturate(.55) brightness(.8)}
-.bat3.sleepy img{filter:brightness(.85)}
-.bat3.sad .perch,.bat3.sleepy .perch{display:block}
-.bat3.sad .shadow,.bat3.sleepy .shadow{display:none}
-.bat3 .spark{position:absolute;inset:-8%;width:116%;height:116%;overflow:visible;animation:twinkle .8s ease-in-out infinite;pointer-events:none}
-.bat3 .zz{position:absolute;right:14%;top:52%;color:#8FB8D8;font:700 14px var(--body,system-ui);animation:zz 2.4s ease-in-out infinite}
-.bat3 .zz.z2{right:6%;top:40%;font-size:10px;animation-delay:.8s}
-@keyframes float3{50%{transform:translateY(-4px) rotate(-2deg)}}
-@keyframes shad{50%{transform:scaleX(.8);opacity:.6}}
-@keyframes hop3{50%{transform:translateY(-8px) scale(1.04)}}
-@keyframes sway3{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
-@keyframes flapL{0%,100%{transform:rotate(7deg)}50%{transform:rotate(-10deg) scaleY(.92)}}
-@keyframes flapR{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(10deg) scaleY(.92)}}
-.flyer{position:fixed;left:0;top:0;z-index:70;cursor:pointer;will-change:transform}
-.flyer .bat3 .wl,.flyer .bat3 .wr{animation-duration:.22s}
 .linkbtn{display:block;margin-top:4px;background:none;border:0;padding:0;color:var(--muted);font-size:.78rem;text-decoration:underline;cursor:pointer}
 .linkbtn.warn{color:var(--warn)}
-@media (prefers-reduced-motion:reduce){.bat3 *{animation:none!important}}
 /* tabs */
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(7,8,10,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);
   padding:6px max(8px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 6px) max(8px,env(safe-area-inset-left,0px))}
@@ -516,6 +448,14 @@ nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;top:-
 .fib .num b{font-family:var(--display);font-size:1.25rem;color:var(--fg)}
 .fib .num{color:var(--muted);font-size:.85rem}
 .fibbar i{background:linear-gradient(90deg,#9CA6AF,#E6E9EC);box-shadow:none}
+/* v30: Final-Check */
+:root{--ease-out:cubic-bezier(.23,1,.32,1)}
+.toast:not([hidden]){animation:toastin .2s var(--ease-out)}
+.timer:not([hidden]){animation:pillin .2s var(--ease-out)}
+.sesspill:not([hidden]){animation:pillin .2s var(--ease-out)}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,-8px) scale(.97)}}
+@keyframes pillin{from{opacity:0;transform:translate(-50%,8px) scale(.97)}}
+@media (prefers-reduced-motion:reduce){.toast,.timer,.sesspill{animation:none!important}}
 </style>
 </head>
 <body>
@@ -547,7 +487,7 @@ nav.tabs button[aria-selected="true"]::before{content:"";position:absolute;top:-
   </div>
 
   <main id="view"></main>
-  <div class="status"><span id="status">Starte …</span> · Version 29</div>
+  <div class="status"><span id="status">Starte …</span> · Version 30</div>
 </div>
 
 <button class="sesspill" id="sesspill" hidden aria-label="Zum laufenden Training"><span class="dotlive"></span><span id="sesspilltime">0:00</span> Training läuft</button>
