@@ -65,7 +65,9 @@ function openSheet(html,onMount){
   $("scrim").addEventListener("click",e=>{ if(e.target.id==="scrim") closeSheet(); });
   onMount && onMount(host.querySelector(".sheet"));
 }
-function closeSheet(){ stopScan(); $("sheethost").innerHTML=""; }
+function closeSheet(){ stopScan(); const host=$("sheethost"), sc=host.querySelector(".scrim");
+  if(!sc||window.matchMedia("(prefers-reduced-motion: reduce)").matches){ host.innerHTML=""; return; }
+  sc.classList.add("closing"); setTimeout(()=>{ if(sc.parentNode===host) host.innerHTML=""; },170); }
 const ICON = {
   check:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>',
   plus:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
@@ -151,14 +153,14 @@ function lineChart(pts,{W=360,H=190,label="",avg=null}={}){
   let lo=Math.min(...vs), hi=Math.max(...vs); const span=(hi-lo)||Math.max(1,hi*0.05); lo-=span*0.15; hi+=span*0.15;
   const x=i=>pad.l+(pts.length===1?0.5:i/(pts.length-1))*(W-pad.l-pad.r), y=v=>pad.t+(H-pad.t-pad.b)*(1-(v-lo)/(hi-lo));
   let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(label)}">`;
-  if(label) s+=`<text x="${pad.l}" y="15" style="fill:var(--fg2);font-weight:500">${esc(label)}</text>`;
+  if(label) s+=`<text x="${pad.l}" y="15" style="fill:var(--fg2);font-weight:500">${esc(label.length>44?label.slice(0,43)+"…":label)}</text>`;
   [lo+(hi-lo)*0.15,(lo+hi)/2,hi-(hi-lo)*0.15].forEach(v=>{ s+=`<line x1="${pad.l}" x2="${W-pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pad.l-6}" y="${y(v)+4}" text-anchor="end">${de(v)}</text>`; });
   const line=pts.map((p,i)=>`${x(i)},${y(p.v)}`).join(" ");
   s+=`<defs><linearGradient id="gfill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".28"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>`;
   if(pts.length>1) s+=`<polygon points="${x(0)},${H-pad.b} ${line} ${x(pts.length-1)},${H-pad.b}" fill="url(#gfill)"/><polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linejoin="round"/>`;
   if(avg && avg.length>1){ const al=avg.map((p,i)=>`${x(i)},${y(p.v)}`).join(" "); s+=`<polyline points="${al}" fill="none" stroke="var(--pr)" stroke-width="2" stroke-dasharray="5 4"/>`; }
   const every=Math.ceil(pts.length/7);
-  pts.forEach((p,i)=>{ s+=`<circle cx="${x(i)}" cy="${y(p.v)}" r="${i===pts.length-1?5:2.8}" fill="var(--accent)"/>`; if(i%every===0||i===pts.length-1) s+=`<text x="${x(i)}" y="${H-6}" text-anchor="middle">${dLabel(p.date)}</text>`; });
+  pts.forEach((p,i)=>{ s+=`<circle cx="${x(i)}" cy="${y(p.v)}" r="${i===pts.length-1?5:2.8}" fill="var(--accent)"/>`; if((i%every===0&&pts.length-1-i>=every*0.8)||i===pts.length-1) s+=`<text x="${x(i)}" y="${H-6}" text-anchor="middle">${dLabel(p.date)}</text>`; });
   const lv=pts[pts.length-1].v; s+=`<text x="${x(pts.length-1)}" y="${y(lv)-10}" text-anchor="end" style="fill:var(--fg);font-weight:600">${de(lv)}</text>`;
   return s+"</svg>";
 }
@@ -166,7 +168,7 @@ function barChart(list,{W=360,H=160}={}){
   const pad={l:30,r:4,t:16,b:22}, max=Math.max(1000,...list.map(x=>x.v))*1.15, bw=(W-pad.l-pad.r)/list.length;
   const y=v=>pad.t+(H-pad.t-pad.b)*(1-v/max);
   let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Kalorien der letzten 7 Tage">`;
-  [1000,2000,3000,4000].filter(v=>v<max).forEach(v=>{ s+=`<line x1="${pad.l}" x2="${W-pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pad.l-5}" y="${y(v)+4}" text-anchor="end">${v/1000}k</text>`; });
+  (()=>{const stp=max>6000?2000:1000; return [...Array(Math.floor(max/stp))].map((_,i)=>(i+1)*stp).filter(v=>v<max);})().forEach(v=>{ s+=`<line x1="${pad.l}" x2="${W-pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pad.l-5}" y="${y(v)+4}" text-anchor="end">${v/1000}k</text>`; });
   list.forEach((d,i)=>{ const bx=pad.l+i*bw+bw*.2,w=bw*.6,h=Math.max(0,H-pad.b-y(d.v));
     s+=`<rect x="${bx}" y="${H-pad.b-h}" width="${w}" height="${h}" rx="5" fill="${d.hl?"var(--accent)":"var(--line2)"}"/><text x="${bx+w/2}" y="${H-7}" text-anchor="middle">${esc(d.l)}</text>`;
     if(d.v) s+=`<text x="${bx+w/2}" y="${H-pad.b-h-5}" text-anchor="middle">${r(d.v)}</text>`; });
@@ -213,7 +215,7 @@ function viewHeute(){
     ${(()=>{ const j=jarvisState(); return `<div class="hjar" data-act="jarvis" role="button" tabindex="0" aria-label="Jarvis antippen"><div class="halo"></div><div class="jav">${batSVG(j.mood,118)}</div></div>`; })()}
     <div class="row between"><span class="lbl">Laut Rhythmus heute</span>${due.today&&(getDay(TODAY()).training.sets||[]).length?'<span class="chip" style="color:#fff;border-color:rgba(255,255,255,.35)">läuft</span>':""}</div>
     <div class="row between" style="align-items:flex-end"><div><b>${due.unit==="Pause"?"Pause":due.unit}</b>
-      <div class="sub">${due.unit==="Pause"?"Erholung. Morgen geht’s weiter.":(()=>{const pl=settings.plan?.[due.unit]||[];return `${pl.length} Übungen · ${pl.reduce((a,p)=>a+p.sets,0)} Sätze`;})()}${due.last&&!due.today?`<br><span class="muted">Zuletzt ${esc(due.last.training.type)} am ${dLabel(due.last.date)}</span>`:""}</div></div>
+      <div class="sub">${due.unit==="Pause"?"Erholung. Morgen geht’s weiter.":(()=>{const pl=settings.plan?.[due.unit]||[];const ns=pl.reduce((a,p)=>a+p.sets,0); return pl.length?`${pl.length} ${pl.length===1?"Übung":"Übungen"} · ${ns} ${ns===1?"Satz":"Sätze"}`:"Noch kein Plan angelegt";})()}${due.last&&!due.today?`<br><span class="muted">Zuletzt ${esc(due.last.training.type)} am ${dLabel(due.last.date)}</span>`:""}</div></div>
       </div>
     ${(()=>{ const j=jarvisState(); return `<div class="hbub"><span class="lbl">Jarvis</span><p id="jline">${esc(j.line)}</p><a class="chatlink" href="${CHAT_URL}" target="_blank" rel="noopener" data-noprop="1">💬 Reden</a></div>`; })()}
     <div class="row" style="gap:6px;justify-content:flex-end">${settings.playlistUrl||settings.soundcloudUrl?`<a class="btn" href="${esc(settings.playlistUrl||settings.soundcloudUrl)}" ${settings.playlistUrl&&settings.soundcloudUrl?'data-act="music"':""} target="_blank" rel="noopener" aria-label="Gym-Playlist öffnen" style="background:rgba(0,0,0,.45);border-color:rgba(255,255,255,.18);color:#fff;padding:10px 12px">${ICON.music}</a>`:""}${due.unit!=="Pause"?`<button class="btn go" data-go="training">Starten</button>`:""}</div>
@@ -244,7 +246,7 @@ function viewHeute(){
   <section class="card">
     <div class="row between"><h2>Essen</h2><div class="row" style="gap:6px"><button class="btn sm" data-act="addfood">${ICON.plus}</button>${settings.aiPhoto?`<button class="btn pri sm" data-act="photofood">${ICON.camera}Foto</button>`:`<a class="btn pri sm" href="https://claude.ai/artifact/VZ8JNe1oJvXiYRyhixfAWD" target="_blank" rel="noopener">${ICON.camera}Foto</a>`}</div></div>
     ${quick.length?`<div><div class="lbl" style="margin-bottom:8px">Mit einem Tipp</div><div class="pills">${quick.map((m,i)=>`<button class="pill" data-quick="${i}">${m.fav?'<b style="color:var(--accent)">★</b>':""}<span class="nm">${esc(m.name.replace(/ \(.*?\)/g,""))}</span><span>${r(m.kcal)}</span></button>`).join("")}</div></div>`:""}
-    <div>${d.meals.length?d.meals.map((m,i)=>`<div class="meal"><div class="nm" data-edit-meal="${i}" role="button" tabindex="0" aria-label="Mahlzeit bearbeiten"><div>${esc(m.name)}</div><div class="mm">${m.time?esc(m.time)+" · ":""}KH ${r(m.carbs)} · E ${r(m.protein)} · F ${r(m.fat)} <span class="edh">✎</span></div></div>
+    <div>${d.meals.length?d.meals.map((m,i)=>`<div class="meal"><div class="nm" data-edit-meal="${i}" role="button" tabindex="0" aria-label="Mahlzeit bearbeiten"><div>${esc(m.name)}</div><div class="mm">${m.time?esc(m.time)+" · ":""}KH ${r(m.carbs)} · E ${r(m.protein)} · <span style="white-space:nowrap">F ${r(m.fat)} <span class="edh">✎</span></span></div></div>
       <span class="kc">${r(m.kcal)}</span><button class="x" data-fav="${i}" aria-label="Als Favorit speichern" title="Favorit" style="color:${(settings.favorites||[]).some(f=>f.name===m.name)?"var(--pr)":"var(--muted)"}">★</button><button class="x" data-del-meal="${i}" aria-label="Löschen">×</button></div>`).join("")
       :`<p class="empty">Noch nichts eingetragen. Tipp oben auf einen Favoriten, scanne einen Barcode oder schreib Claude, was du gegessen hast.</p>`}</div>
   </section>
@@ -346,7 +348,7 @@ function viewFortschritt(){
     </div>
     ${prs.length?`<p class="hint">★ ${prs.map(esc).join(", ")}</p>`:""}
   </section>
-  ${rep?`<section class="card"><div class="row between"><h2>Wochenbericht von Claude</h2><span class="hint">${esc(rep.data.title||rep.id)}</span></div><div class="report">${esc(rep.data.text||"")}</div></section>`:""}
+  ${rep?`<section class="card"><div class="row between wrapf"><h2>Wochenbericht von Claude</h2><span class="hint">${esc(rep.data.title||rep.id)}</span></div><div class="report">${esc(rep.data.text||"")}</div></section>`:""}
   <section class="card">
     <h2>Kraftentwicklung</h2>
     ${list.length?`<div class="exchips">${list.map(x=>`<button data-ex-sel="${esc(x.name)}" aria-pressed="${x.name===selEx}">${esc(x.name.replace(/ \(.*\)/,""))}</button>`).join("")}</div>
@@ -1019,7 +1021,7 @@ function jarvisSay(){
 let flying=false, lastFly=0;
 function flyby(force){
   if(flying || settings.jarvisFly===false) return; if(window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  if(!force && Date.now()-lastFly<45000) return; if($("sheethost").innerHTML) return;
+  if(!force && Date.now()-lastFly<45000) return; if($("sheethost").innerHTML) return; if(tab==="training"||(sessionState()&&!sessionState().end)) return;
   flying=true; lastFly=Date.now();
   const W=innerWidth, H=innerHeight, fromLeft=Math.random()<.5, y0=H*(.2+Math.random()*.45), y1=H*(.15+Math.random()*.5);
   const el=document.createElement("div"); el.className="flyer"; el.innerHTML=batSVG(jarvisState().mood==="sad"?"neutral":"excited",64);
@@ -1033,6 +1035,7 @@ function flyby(force){
     if(k<1) requestAnimationFrame(step); else { el.remove(); flying=false; } };
   requestAnimationFrame(step);
 }
+document.addEventListener("touchstart",()=>{},{passive:true}); /* iOS: :active-Zustände aktivieren */
 setTimeout(()=>flyby(true),2500);
 setInterval(()=>{ if(document.visibilityState==="visible" && Math.random()<.35) flyby(false); },30000);
 

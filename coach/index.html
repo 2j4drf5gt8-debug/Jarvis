@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <title>Jarvis</title>
 <meta name="theme-color" content="#07080A">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -405,8 +405,8 @@ nav.tabs svg{width:24px;height:24px}
 .planrow input.n{text-align:left}
 .switch{position:relative;width:50px;height:30px;flex:none}
 .switch input{opacity:0;position:absolute;inset:0;margin:0}
-.switch span{position:absolute;inset:0;border-radius:999px;background:var(--line2);transition:.2s}
-.switch span::after{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s}
+.switch span{position:absolute;inset:0;border-radius:999px;background:var(--line2);transition:background-color .2s ease}
+.switch span::after{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:transform .2s cubic-bezier(.23,1,.32,1)}
 .switch input:checked+span{background:var(--good)}
 .switch input:checked+span::after{transform:translateX(20px)}
 
@@ -420,6 +420,37 @@ nav.tabs svg{width:24px;height:24px}
   @keyframes fade{from{opacity:0}} @keyframes up{from{transform:translateY(40px);opacity:.6}}
 }
 @media (max-width:370px){ .sets{grid-template-columns:24px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 42px} .stat b{font-size:1.4rem} }
+/* v23: Feinschliff (mobile-native / emil-design-eng) */
+html,body{overscroll-behavior:none}
+body{min-height:100dvh}
+.sheet{max-height:92dvh;overscroll-behavior:contain}
+button,a,[role="button"],[data-act]{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.btn,.pill,.iconbtn,.sets .ok,.supp,.quick button,.exchips button,.unitsw button,.seg button,.datenav button,nav.tabs button{transition:transform 120ms cubic-bezier(.23,1,.32,1)}
+.pill:active,.iconbtn:active,.sets .ok:active,.supp:active,.quick button:active,.exchips button:active,.datenav button:active{transform:scale(.97)}
+body::after{animation:none}
+.hero .sub{white-space:normal}
+.meal .nm div:first-child{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.prod .t div:first-child{white-space:normal}
+.pill .nm{white-space:normal;max-width:220px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.2}
+.scrim.closing{pointer-events:none;animation:scrimout .17s ease forwards}
+.scrim.closing .sheet{animation:sheetout .17s cubic-bezier(.23,1,.32,1) forwards}
+@keyframes scrimout{to{opacity:0}} @keyframes sheetout{to{transform:translateY(60px);opacity:0}}
+/* v24: break-ui-Fixes */
+@media (max-width:479px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sk span{overflow-wrap:normal;-webkit-hyphens:auto;hyphens:auto}
+@media (max-width:360px){.streaks{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:12px}.sk.big{border-right:0}.macros3 .lbl{white-space:normal}}
+.macros3 b{white-space:nowrap}
+.meal .nm .mm{white-space:normal;overflow:visible}
+/* v25: Typografie + Transparenz (apple-design) */
+h1,.titlerow h1{letter-spacing:0}
+.hero b{letter-spacing:.005em}
+.sk b,.stat b,.kcal b,.ring .in b,.sessbar .sess-time{letter-spacing:0}
+@media (prefers-reduced-transparency:reduce){
+  nav.tabs{background:#07080A;backdrop-filter:none;-webkit-backdrop-filter:none}
+  .hbub{background:#10131A;backdrop-filter:none;-webkit-backdrop-filter:none}
+  .scrim{background:rgba(0,0,0,.75)}
+}
+@media (prefers-contrast:more){.card,.btn,.field,.pill{border-color:#5A636D}}
 </style>
 </head>
 <body>
@@ -451,7 +482,7 @@ nav.tabs svg{width:24px;height:24px}
   </div>
 
   <main id="view"></main>
-  <div class="status"><span id="status">Starte …</span> · Version 25</div>
+  <div class="status"><span id="status">Starte …</span> · Version 26</div>
 </div>
 
 <button class="sesspill" id="sesspill" hidden aria-label="Zum laufenden Training"><span class="dotlive"></span><span id="sesspilltime">0:00</span> Training läuft</button>
