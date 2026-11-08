@@ -181,7 +181,7 @@ const SKYLINE=(()=>{ let seed=7; const rnd=()=>{ seed=(seed*9301+49297)%233280; 
   while(x<W){ const w=14+rnd()*26, h=35+rnd()*80, y=H-h;
     shapes+=`M${x},${H}V${y}H${x+w}V${H}Z`;
     if(rnd()>.55){ const cx=x+w/2, sh=10+rnd()*26; shapes+=`M${x+w*.25},${y}L${cx},${y-sh}L${x+w*.75},${y}Z`; }
-    for(let wy=y+6; wy<H-6; wy+=9) for(let wx=x+4; wx<x+w-4; wx+=6) if(rnd()>.9) wins+=`<rect x="${wx.toFixed(1)}" y="${wy.toFixed(1)}" width="2" height="3" fill="#E3A73B" opacity="${(0.35+rnd()*.5).toFixed(2)}"/>`;
+    for(let wy=y+6; wy<H-6; wy+=9) for(let wx=x+4; wx<x+w-4; wx+=6) if(rnd()>.9) wins+=`<rect x="${wx.toFixed(1)}" y="${wy.toFixed(1)}" width="2" height="3" fill="#F2C230" opacity="${(0.35+rnd()*.5).toFixed(2)}"/>`;
     x+=w+1+rnd()*3; }
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" aria-hidden="true"><defs><linearGradient id="skyf" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#323B47"/><stop offset="1" stop-color="#14181D"/></linearGradient></defs><path d="${shapes}" fill="url(#skyf)"/>${wins}</svg>`; })();
 
@@ -212,7 +212,7 @@ function viewHeute(){
   const wk=[...Array(7)].map((_,i)=>{const ds=shift(TODAY(),i-6);return{ds,l:new Date(ds+"T12:00:00").toLocaleDateString("de-DE",{weekday:"short"}).slice(0,2),v:totals(days.get(ds)||emptyDay(ds)).kcal,hl:ds===cur};});
   return `
   ${cur===TODAY()?`<section class="card hero"><div class="beam b1"></div><div class="beam b2"></div><div class="fog"></div><div class="sky">${SKYLINE}</div>
-    ${(()=>{ const j=jarvisState(); return `<div class="hjar" data-act="jarvis" role="button" tabindex="0" aria-label="Jarvis antippen"><div class="halo"></div><div class="jav">${batSVG(j.mood,118)}</div></div>`; })()}
+    ${(()=>{ const j=jarvisState(); return `<div class="hlogo" aria-hidden="true"><img src="icon-512.png?v=8" alt=""></div>`; })()}
     <div class="row between"><span class="lbl">Laut Rhythmus heute</span>${due.today&&(getDay(TODAY()).training.sets||[]).length?'<span class="chip" style="color:#fff;border-color:rgba(255,255,255,.35)">läuft</span>':""}</div>
     <div class="row between" style="align-items:flex-end"><div><b>${due.unit==="Pause"?"Pause":due.unit}</b>
       <div class="sub">${due.unit==="Pause"?"Erholung. Morgen geht’s weiter.":(()=>{const pl=settings.plan?.[due.unit]||[];const ns=pl.reduce((a,p)=>a+p.sets,0); return pl.length?`${pl.length} ${pl.length===1?"Übung":"Übungen"} · ${ns} ${ns===1?"Satz":"Sätze"}`:"Noch kein Plan angelegt";})()}${due.last&&!due.today?`<br><span class="muted">Zuletzt ${esc(due.last.training.type)} am ${dLabel(due.last.date)}</span>`:""}</div></div>
@@ -404,7 +404,7 @@ function viewKoerper(){
 }
 
 /* ---------------- notes ---------------- */
-const NCOL={"":"transparent",amber:"#E3A73B",steel:"#8FB8D8",green:"#5FC48E",red:"#E5635A",violet:"#A98BC9"};
+const NCOL={"":"transparent",amber:"#F2C230",steel:"#8FB8D8",green:"#5FC48E",red:"#E5635A",violet:"#A98BC9"};
 const nid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const tagsOf=t=>[...new Set((t.match(/#[\wäöüÄÖÜß-]+/g)||[]).map(x=>x.toLowerCase()))];
 function noteHTML(text,limit){
@@ -824,7 +824,6 @@ function settingsSheet(){
       <label class="lbl" for="st-sp">Spotify-Playlist (Link)</label><input class="field" id="st-sp" value="${esc(s.playlistUrl||"")}" placeholder="https://open.spotify.com/playlist/…">
       <label class="lbl" for="st-sc">SoundCloud (Link zu Playlist oder Profil)</label><input class="field" id="st-sc" value="${esc(s.soundcloudUrl||"")}" placeholder="https://soundcloud.com/…">
       <p class="hint">In SoundCloud: Playlist öffnen → Teilen → Link kopieren → hier einfügen.</p>
-      <label class="row" style="justify-content:space-between"><span>Jarvis fliegt herum</span><span class="switch"><input type="checkbox" id="st-fly" ${s.jarvisFly!==false?"checked":""}><span></span></span></label>
       <label class="row" style="justify-content:space-between"><span>Sound beim Start</span><span class="switch"><input type="checkbox" id="st-snd" ${s.startSound!==false?"checked":""}><span></span></span></label>
       <label class="lbl" for="st-am">Beim Tipp auf „Starten“ automatisch öffnen</label>
       <select class="field" id="st-am">${[["soundcloud","SoundCloud"],["spotify","Spotify-Playlist"],["off","Nichts öffnen"]].map(([v,l])=>`<option value="${v}" ${(s.autoMusic||"soundcloud")===v?"selected":""}>${l}</option>`).join("")}</select></div>
@@ -855,7 +854,7 @@ function settingsSheet(){
         n.restSeconds=+sh.querySelector("#st-rest").value||150;
         const okUrl=(v,host)=>{ v=v.trim(); try{ const u=new URL(v); return u.protocol==="https:"&&u.hostname.endsWith(host)?v:""; }catch(_){ return ""; } };
         n.playlistUrl=okUrl(sh.querySelector("#st-sp").value,"spotify.com"); n.soundcloudUrl=okUrl(sh.querySelector("#st-sc").value,"soundcloud.com");
-        n.autoMusic=sh.querySelector("#st-am").value; n.startSound=sh.querySelector("#st-snd").checked; n.jarvisFly=sh.querySelector("#st-fly").checked;
+        n.autoMusic=sh.querySelector("#st-am").value; n.startSound=sh.querySelector("#st-snd").checked; 
         n.trackStart=sh.querySelector("#st-ts").value||"2026-10-19"; n.goalDate=sh.querySelector("#st-gd").value||"2027-01-31"; n.goalLabel=sh.querySelector("#st-gl").value.trim();
         ["U1","U2"].forEach(u=>{ const old=settings.plan?.[u]||[];
           n.plan[u]=[...sh.querySelectorAll(`#plan-${u} .planrow`)].map(row=>{ const g=k=>row.querySelector(`[data-k="${k}"]`).value; const name=g("name").trim(); if(!name) return null;
@@ -962,7 +961,7 @@ function startSequence(){
   const reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const due=nextDue(); const u=due.unit==="Pause"?(due.last?.training?.type==="U1"?"U2":"U1"):due.unit;
   const ov=document.createElement("div"); ov.className="ignite"+(reduce?" reduce":"");
-  ov.innerHTML=`<div class="ig-flash"></div><svg class="ig-bat" viewBox="0 0 100 64" aria-hidden="true"><path d="${BAT_PATH}"/></svg>
+  ov.innerHTML=`<div class="ig-flash"></div><img class="ig-logo" src="icon-512.png?v=8" alt="" aria-hidden="true">
     <div class="ig-text"><span>Mission</span><b>${esc(u)}</b><i></i></div>`;
   document.body.appendChild(ov);
   try{ navigator.vibrate&&navigator.vibrate([30,40,60]); }catch(e){}
@@ -978,7 +977,7 @@ let batN=0;
 function batSVG(mood="neutral",size=110){
   batN++;
   const h=Math.round(size*796/896);
-  const fx=mood==="excited"?`<svg class="spark" viewBox="0 0 100 100" aria-hidden="true"><path d="M10 8 l2.6 6.5 l6.5 2.6 l-6.5 2.6 l-2.6 6.5 l-2.6 -6.5 l-6.5 -2.6 l6.5 -2.6z" fill="#F0C25A"/><path d="M90 20 l1.8 4.5 l4.5 1.8 l-4.5 1.8 l-1.8 4.5 l-1.8 -4.5 l-4.5 -1.8 l4.5 -1.8z" fill="#F0C25A"/></svg>`
+  const fx=mood==="excited"?`<svg class="spark" viewBox="0 0 100 100" aria-hidden="true"><path d="M10 8 l2.6 6.5 l6.5 2.6 l-6.5 2.6 l-2.6 6.5 l-2.6 -6.5 l-6.5 -2.6 l6.5 -2.6z" fill="#FFD84A"/><path d="M90 20 l1.8 4.5 l4.5 1.8 l-4.5 1.8 l-1.8 4.5 l-1.8 -4.5 l-4.5 -1.8 l4.5 -1.8z" fill="#FFD84A"/></svg>`
           :mood==="sleepy"?`<span class="zz">z</span><span class="zz z2">z</span>`:"";
   return `<div class="bat3 ${mood}" style="width:${size}px;height:${h}px" aria-hidden="true">
   <i class="shadow"></i><i class="perch"></i>
@@ -995,7 +994,7 @@ function jarvisState(){
   const kre=settings.supplements.find(x=>/kreatin/i.test(x)), kreDone=kre&&d.supps?.[kre];
   const pick=a=>a[(new Date().getDate()+h)%a.length];
   if(st&&!st.end) return {mood:"excited",line:pick(["Wir sind drin. Jeder Satz zählt!","Ich schau zu. Mach mich stolz!","Fokus. Saubere Wiederholungen, keine Ausreden."])};
-  if(trained) return {mood:"happy",line:pick([`Stark, ${d.training.type||"Training"} ist erledigt! Jetzt Eiweiß und Schlaf.`, "Du warst trainieren. Ich bin richtig stolz.", "Erledigt! Gotham… äh, deine Schultern danken dir."])+(pt&&tot.protein<pt?` Noch ${r(pt-tot.protein)} g Eiweiß.`:"")};
+  if(trained) return {mood:"happy",line:pick([`Stark, ${d.training.type||"Training"} ist erledigt! Jetzt Eiweiß und Schlaf.`, "Du warst trainieren. Ich bin richtig stolz.", "Erledigt! Deine Schultern danken dir."])+(pt&&tot.protein<pt?` Noch ${r(pt-tot.protein)} g Eiweiß.`:"")};
   if(due.unit==="Pause") return {mood:"sleepy",line:h>=21?"Pausentag. Früh ins Bett, morgen wird’s ernst.":"Heute ist Pause. Erholung gehört zum Plan."+(kre&&!kreDone?" Kreatin trotzdem nehmen!":"")};
   if(h>=17) return {mood:"sad",line:pick([`Du warst heute noch nicht trainieren… ${due.unit} wartet auf dich.`,`Es wird dunkel und ${due.unit} ist noch offen. Ich bin ein bisschen traurig.`,"Kein Training heute? Komm schon, ich glaub an dich."])};
   if(kre&&!kreDone&&h>=20) return {mood:"neutral",line:"Kreatin nicht vergessen!"};
@@ -1004,7 +1003,7 @@ function jarvisState(){
 function jarvisCard(){
   const j=jarvisState();
   return `<section class="card jcard" data-act="jarvis">
-    <div class="jav">${batSVG(j.mood,92)}</div>
+    <div class="jav"><img class="cb-logo" src="icon-512.png?v=8" alt=""></div>
     <div class="jbub"><div class="lbl">Jarvis</div><p>${esc(j.line)}</p>
       <a class="btn sm" href="${CHAT_URL}" target="_blank" rel="noopener" data-noprop="1">💬 Mit Jarvis reden</a></div>
   </section>`;
@@ -1036,8 +1035,7 @@ function flyby(force){
   requestAnimationFrame(step);
 }
 document.addEventListener("touchstart",()=>{},{passive:true}); /* iOS: :active-Zustände aktivieren */
-setTimeout(()=>flyby(true),2500);
-setInterval(()=>{ if(document.visibilityState==="visible" && Math.random()<.35) flyby(false); },30000);
+/* Maskottchen-Flüge entfernt (v28) */
 
 /* ---------------- Steigerungs-Animation ---------------- */
 function celebrateSound(big){ playSfx(big?"pr":"up"); }
@@ -1046,7 +1044,7 @@ function celebrate(type,big,sub){
   document.querySelectorAll(".celeb").forEach(x=>x.remove());
   const el=document.createElement("div"); el.className=`celeb ${type}${reduce?" reduce":""}`; el.setAttribute("role","status");
   const sparks=reduce?"":[...Array(type==="pr"?18:10)].map((_,k)=>{ const a=(k/(type==="pr"?18:10))*Math.PI*2, dist=90+Math.random()*70; return `<i style="--x:${Math.cos(a)*dist}px;--y:${Math.sin(a)*dist}px;--d:${(Math.random()*0.15).toFixed(2)}s"></i>`; }).join("");
-  el.innerHTML=`<div class="cb-ring"></div><div class="cb-sparks">${sparks}</div><div class="cb-box"><div class="cb-jarvis">${batSVG("excited",type==="pr"?96:76)}<div class="cb-say">${type==="pr"?"Jarvis: Unglaublich!":"Jarvis: Steigerung!"}</div></div><b>${esc(big)}</b><span>${esc(sub)}</span></div>`;
+  el.innerHTML=`<div class="cb-ring"></div><div class="cb-sparks">${sparks}</div><div class="cb-box"><div class="cb-jarvis"><img class="cb-logo" src="icon-512.png?v=8" alt=""><div class="cb-say">${type==="pr"?"Unglaublich!":"Steigerung!"}</div></div><b>${esc(big)}</b><span>${esc(sub)}</span></div>`;
   document.body.appendChild(el);
   celebrateSound(type==="pr");
   try{ navigator.vibrate&&navigator.vibrate(type==="pr"?[40,60,40,60,120]:[50,40,50]); }catch(e){}
