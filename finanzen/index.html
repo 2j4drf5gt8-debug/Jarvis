@@ -82,6 +82,27 @@ h1{margin:0;font-weight:400;letter-spacing:-.01em;font-size:30px;line-height:36p
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @media (hover:hover) and (pointer:fine){.btn:hover{filter:brightness(1.08)}.chip:hover{color:var(--text)}}
+
+.sheet>*{flex-shrink:0}
+.field{min-width:0}.field input,.field select{width:100%;min-width:0;box-sizing:border-box}
+.grid-cats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.cat-btn{min-height:44px;padding:8px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;line-height:16px;text-align:center}
+.cat-btn.on{border-color:var(--accent);background:rgba(200,176,122,.12);color:var(--accent);font-weight:500}
+.tx{width:100%;text-align:left;color:var(--text)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);font-size:14px}
+.kv:last-child{border-bottom:0}
+.kv span:first-child{color:var(--muted)}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;font-size:14px}
+.toggle input{width:22px;height:22px;accent-color:var(--accent)}
+.seg{display:flex;gap:4px;padding:3px;border-radius:var(--r-md);background:var(--bg);border:1px solid var(--border)}
+.seg button{flex:1;height:36px;border:0;border-radius:9px;background:transparent;color:var(--muted);font-size:13px}
+.seg button.on{background:var(--border);color:var(--accent);font-weight:500}
+.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
+.pill.warn{border-color:rgba(194,113,95,.5);color:var(--danger)}
+.pill.ok{border-color:rgba(143,169,138,.4);color:var(--income)}
+.neg{color:var(--danger)}
+textarea{width:100%;min-height:72px;padding:12px 14px;border-radius:var(--r-md);border:1px solid var(--border-input);background:var(--surface);outline:none;resize:vertical}
+textarea:focus{border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -225,79 +246,74 @@ const Parser = (() => {
 const SB_URL = 'https://rxwomtelcddkhyrilhsq.supabase.co';
 const SB_KEY = 'sb_publishable_7ZfExgJbLXFw7-BJO5zSnA_rkpF5UtY';
 const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+const OWNER_NAME = 'Leon Marcellus Gaspar';
 
-const S = { conns: [], bankCfg: null, syncing: false, user: null, tab: 'home', accounts: [], tx: [], cats: {}, catList: [], rules: [], filter: 'all', q: '', discreet: false, sheet: null, toast: null, loading: true, err: null };
+const S = {
+  user: null, tab: 'home', loading: true, err: null,
+  accounts: [], tx: [], cats: {}, catList: [], rules: [], conns: [], contracts: [], budgets: [],
+  filter: 'all', q: '', catFilter: null, discreet: false, sheet: null, toast: null, syncing: false, lastAuto: 0, period: 'month'
+};
 try { S.discreet = localStorage.getItem('fin_discreet') === '1'; } catch (e) {}
 
+/* ===== Helfer ===== */
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function eur(c, sign = false) {
+  c = Math.round(Number(c) || 0);
   const neg = c < 0, a = Math.abs(c);
   const main = Math.floor(a / 100).toLocaleString('de-DE'), cents = String(a % 100).padStart(2, '0');
-  return `<span class="amt">${neg ? '−' : (sign ? '+ ' : '')}${main}<span class="c">,${cents} €</span></span>`;
+  return `<span class="amt">${neg ? '−' : (sign && c > 0 ? '+ ' : '')}${main}<span class="c">,${cents} €</span></span>`;
 }
-const fmtDay = d => {
-  const today = new Date().toISOString().slice(0, 10);
-  const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-  if (d === today) return 'Heute';
-  if (d === y) return 'Gestern';
-  return new Date(d + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'short' });
-};
+const eurPlain = c => (Math.round(c) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+const iso = d => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+const TODAY = () => iso(new Date());
+const addDays = (s, n) => { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return iso(d); };
+const addMonths = (s, n) => { const d = new Date(s + 'T12:00:00'); const day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n); const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); d.setDate(Math.min(day, last)); return iso(d); };
+const daysBetween = (a, b) => Math.round((Date.parse(b + 'T12:00:00') - Date.parse(a + 'T12:00:00')) / 864e5);
+const fmtDate = (s, opt = { day: 'numeric', month: 'short' }) => s ? new Date(s + 'T12:00:00').toLocaleDateString('de-DE', opt) : '';
+const fmtDay = d => { const t = TODAY(); if (d === t) return 'Heute'; if (d === addDays(t, -1)) return 'Gestern'; return new Date(d + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'short' }); };
+const INTERVAL = { weekly: 'wöchentlich', '4weekly': 'alle 4 Wochen', monthly: 'monatlich', '2monthly': 'alle 2 Monate', quarterly: 'vierteljährlich', halfyearly: 'halbjährlich', yearly: 'jährlich' };
+const PER_MONTH = { weekly: 52 / 12, '4weekly': 13 / 12, monthly: 1, '2monthly': 1 / 2, quarterly: 1 / 3, halfyearly: 1 / 6, yearly: 1 / 12 };
+function nextDate(s, iv) {
+  switch (iv) { case 'weekly': return addDays(s, 7); case '4weekly': return addDays(s, 28); case 'monthly': return addMonths(s, 1); case '2monthly': return addMonths(s, 2);
+    case 'quarterly': return addMonths(s, 3); case 'halfyearly': return addMonths(s, 6); default: return addMonths(s, 12); }
+}
+function occurrences(c, from, to) { const out = []; let d = c.next_due_on; if (!d) return out; let g = 0; while (d < from && g++ < 400) d = nextDate(d, c.interval); while (d <= to && g++ < 800) { out.push(d); d = nextDate(d, c.interval); } return out; }
+const isTransfer = t => { const c = S.cats[t.category_id]; return c && c.kind === 'transfer'; };
+const leaves = () => S.tx.filter(t => !t.is_split_parent);
 const ICON = {
-  home: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
-  list: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
-  repeat: '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>',
-  pie: '<path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
+  home: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', list: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
+  repeat: '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>', pie: '<path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   eyeoff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.8M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a10 10 0 0 0 4.2-.9"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>',
-  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
-  close: '<path d="M6 6l12 12M18 6L6 18"/>',
-  upload: '<path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/>'
+  plus: '<path d="M12 5v14M5 12h14"/>', close: '<path d="M6 6l12 12M18 6L6 18"/>', upload: '<path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/>',
+  chev: '<path d="M9 6l6 6-6 6"/>', clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
 };
 const svg = (k, s = 20, w = 1.5) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
-
-function toast(msg) { S.toast = msg; render(); clearTimeout(toast.t); toast.t = setTimeout(() => { S.toast = null; render(); }, 3500); }
+function toast(msg) { S.toast = msg; render(); clearTimeout(toast.t); toast.t = setTimeout(() => { S.toast = null; render(); }, 3800); }
+const closeBtn = `<button class="icon-btn" data-act="close" aria-label="Schließen">${svg('close', 16)}</button>`;
+const sheetHead = t => `<div style="display:flex;justify-content:space-between;align-items:center"><span class="over" style="color:var(--accent)">${t}</span>${closeBtn}</div>`;
+const rowBtn = (act, attrs, left, right) => `<button class="row tap" data-act="${act}" ${attrs} style="width:100%;background:none;border-left:0;border-right:0;border-top:0;padding:0;text-align:left;color:var(--text)">${left}${right}</button>`;
 
 /* ===== Daten ===== */
 async function load() {
   S.loading = true; render();
-  const [a, c, r, t, k] = await Promise.all([
+  const [a, c, r, t, k, ct, b] = await Promise.all([
     sb.from('fin_accounts').select('*').eq('archived', false).order('created_at'),
     sb.from('fin_categories').select('*').order('name'),
     sb.from('fin_category_rules').select('*').order('priority'),
-    sb.from('fin_transactions').select('id,account_id,booked_on,amount_cents,counterparty,purpose,category_id,status,is_split_parent,note').order('booked_on', { ascending: false }).order('created_at', { ascending: false }).limit(1000),
-    sb.from('fin_bank_connections').select('id,aspsp_name,status,consent_valid_until,last_error,updated_at').in('status', ['active', 'expired', 'error']).order('created_at', { ascending: false })
+    sb.from('fin_transactions').select('id,account_id,booked_on,amount_cents,counterparty,purpose,category_id,category_source,contract_id,parent_id,status,is_split_parent,note').order('booked_on', { ascending: false }).order('created_at', { ascending: false }).limit(4000),
+    sb.from('fin_bank_connections').select('id,aspsp_name,status,consent_valid_until,last_error,updated_at').in('status', ['active', 'expired', 'error']).order('created_at', { ascending: false }),
+    sb.from('fin_contracts').select('*').order('next_due_on'),
+    sb.from('fin_budgets').select('*')
   ]);
-  S.conns = k.data || [];
-  const e = a.error || c.error || r.error || t.error || k.error;
+  const e = [a, c, r, t, k, ct, b].map(x => x.error).find(Boolean);
   S.err = e ? e.message : null;
   S.accounts = a.data || []; S.catList = c.data || []; S.rules = r.data || []; S.tx = t.data || [];
+  S.conns = k.data || []; S.contracts = ct.data || []; S.budgets = b.data || [];
   S.cats = Object.fromEntries(S.catList.map(x => [x.id, x]));
   S.loading = false; render();
 }
-
-async function importCsv(file, accountId, newBalance) {
-  const text = Parser.decode(await file.arrayBuffer());
-  const res = Parser.parse(text);
-  if (!res.rows.length) throw new Error('In der Datei sind keine Buchungen.');
-  await Parser.withHashes(accountId, res.rows);
-  const rows = res.rows.map(t => {
-    const cat = Parser.categorize(t, S.rules);
-    return { ...t, account_id: accountId, category_id: cat, category_source: cat ? 'rule' : null };
-  });
-  let inserted = 0;
-  for (let i = 0; i < rows.length; i += 500) {
-    const { data, error } = await sb.from('fin_transactions').upsert(rows.slice(i, i + 500), { onConflict: 'account_id,dedupe_hash', ignoreDuplicates: true }).select('id');
-    if (error) throw error;
-    inserted += (data || []).length;
-  }
-  const upd = { last_sync_at: new Date().toISOString(), source: 'csv' };
-  if (newBalance !== null) upd.balance_cents = newBalance;
-  await sb.from('fin_accounts').update(upd).eq('id', accountId);
-  return { total: rows.length, inserted, skipped: rows.length - inserted, bad: res.errors.length };
-}
-
 async function fn(body) {
   const { data: { session } } = await sb.auth.getSession();
   const r = await fetch(SB_URL + '/functions/v1/fin-bank', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + (session ? session.access_token : '') }, body: JSON.stringify(body) });
@@ -305,22 +321,27 @@ async function fn(body) {
   if (!r.ok) throw new Error(d.error || ('Fehler ' + r.status));
   return d;
 }
-async function syncNow() {
+async function syncNow(silent = false) {
   if (S.syncing) return;
-  S.syncing = true; render();
+  S.syncing = true; S.lastAuto = Date.now(); render();
   try {
     const d = await fn({ action: 'sync' });
     const n = (d.synced || []).reduce((s, x) => s + x.inserted, 0);
     const errs = (d.synced || []).flatMap(x => x.errors || []);
-    toast(errs.length ? 'Teilweise aktualisiert: ' + errs[0] : (n ? n + ' neue Buchungen' : 'Alles aktuell'));
-  } catch (e) { toast('Abruf fehlgeschlagen: ' + e.message); }
+    if (errs.length) toast('Teilweise aktualisiert: ' + errs[0]);
+    else if (!silent || n) toast(n ? `${n} neue Buchung${n === 1 ? '' : 'en'}` : 'Alles aktuell');
+  } catch (e) { if (!silent) toast('Abruf fehlgeschlagen: ' + e.message); }
   S.syncing = false; await load();
+}
+function maybeAutoSync() {
+  if (!S.user || !S.conns.some(c => c.status === 'active')) return;
+  const last = Math.max(0, ...S.accounts.filter(a => a.source === 'psd2' && a.last_sync_at).map(a => Date.parse(a.last_sync_at)));
+  if (Date.now() - last > 5 * 60e3 && Date.now() - S.lastAuto > 60e3) syncNow(true);
 }
 async function openBank() {
   S.sheet = { kind: 'bank', step: 'loading' }; render();
   try {
     const st = await fn({ action: 'status' });
-    S.bankCfg = st;
     if (!st.configured) { S.sheet = { kind: 'bank', step: 'setup', redirect: st.redirect_url }; render(); return; }
     const d = await fn({ action: 'aspsps', country: 'DE' });
     S.sheet = { kind: 'bank', step: 'pick', list: d.aspsps || [], q: '' }; render();
@@ -330,6 +351,47 @@ async function startBank(name, max) {
   S.sheet.busy = name; render();
   try { const d = await fn({ action: 'start', name, country: 'DE', max }); location.href = d.url; }
   catch (e) { S.sheet.busy = null; S.sheet.err = e.message; render(); }
+}
+async function rpc(name, args) { const { data, error } = await sb.rpc(name, args); if (error) throw error; return data; }
+
+/* ===== Berechnungen ===== */
+function giroBalance() { return S.accounts.filter(a => a.type === 'giro' && a.include_in_total).reduce((s, a) => s + Number(a.balance_cents), 0); }
+function total() { return S.accounts.filter(a => a.include_in_total).reduce((s, a) => s + Number(a.balance_cents), 0); }
+function payPeriod() {
+  const t = TODAY();
+  const inc = S.contracts.filter(c => c.status === 'active' && c.is_income && c.next_due_on).sort((a, b) => a.next_due_on < b.next_due_on ? -1 : 1)[0];
+  if (inc) return { end: addDays(inc.next_due_on, -1), label: `bis ${esc(inc.provider)} am ${fmtDate(inc.next_due_on)}`, income: inc };
+  const d = new Date(); const end = iso(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+  return { end, label: `bis Monatsende (${fmtDate(end)})`, income: null };
+}
+function freeToSpend() {
+  const t = TODAY(), p = payPeriod();
+  const upcoming = [];
+  for (const c of S.contracts.filter(c => c.status === 'active' && !c.is_income)) for (const d of occurrences(c, addDays(t, 1), p.end)) upcoming.push({ c, d });
+  const sumUp = upcoming.reduce((s, x) => s + Number(x.c.amount_cents), 0);
+  const free = giroBalance() + sumUp;
+  const days = Math.max(1, daysBetween(t, p.end) + 1);
+  return { ...p, free, perDay: Math.floor(free / days), days, upcoming: upcoming.sort((a, b) => a.d < b.d ? -1 : 1), sumUp };
+}
+function forecast(days = 30) {
+  const t = TODAY(), end = addDays(t, days); let bal = giroBalance();
+  const ev = [];
+  for (const c of S.contracts.filter(c => c.status === 'active')) for (const d of occurrences(c, addDays(t, 1), end)) ev.push({ d, v: Number(c.amount_cents), name: c.provider });
+  ev.sort((a, b) => a.d < b.d ? -1 : 1);
+  const pts = [{ d: t, v: bal }];
+  for (let i = 1; i <= days; i++) { const d = addDays(t, i); for (const e of ev.filter(e => e.d === d)) bal += e.v; pts.push({ d, v: bal }); }
+  return { pts, ev, end, min: Math.min(...pts.map(p => p.v)) };
+}
+function monthRange(offset = 0) { const d = new Date(); const s = new Date(d.getFullYear(), d.getMonth() + offset, 1); const e = new Date(d.getFullYear(), d.getMonth() + offset + 1, 0); return [iso(s), iso(e)]; }
+function spentIn(catId, from, to) { return leaves().filter(t => t.category_id === catId && t.amount_cents < 0 && t.booked_on >= from && t.booked_on <= to).reduce((s, t) => s - Number(t.amount_cents), 0); }
+function monthStats(n = 6) {
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const [f, e] = monthRange(-i);
+    const xs = leaves().filter(t => t.booked_on >= f && t.booked_on <= e && !isTransfer(t) && t.status === 'booked');
+    out.push({ label: new Date(f + 'T12:00:00').toLocaleDateString('de-DE', { month: 'short' }), inc: xs.filter(t => t.amount_cents > 0).reduce((s, t) => s + Number(t.amount_cents), 0), out: -xs.filter(t => t.amount_cents < 0).reduce((s, t) => s + Number(t.amount_cents), 0) });
+  }
+  return out;
 }
 
 /* ===== Ansichten ===== */
@@ -344,16 +406,18 @@ function vLogin() {
     </form></div>`;
 }
 
-function total() { return S.accounts.filter(a => a.include_in_total).reduce((s, a) => s + Number(a.balance_cents), 0); }
-
 function vHome() {
   const t = total();
-  const monthStart = new Date().toISOString().slice(0, 8) + '01';
-  const monthSum = S.tx.filter(x => x.booked_on >= monthStart && !x.is_split_parent).reduce((s, x) => s + Number(x.amount_cents), 0);
   const main = Math.floor(Math.abs(t) / 100).toLocaleString('de-DE'), cents = String(Math.abs(t) % 100).padStart(2, '0');
-  const accs = S.accounts.map(a => `<button class="row tap" data-act="${a.source === 'psd2' ? 'sync' : 'open-account'}" data-id="${a.id}" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;padding:0;text-align:left">
-      <span class="stack" style="gap:2px"><span style="font-size:16px">${esc(a.name)}</span><span class="muted" style="font-size:12px">${esc(a.bank_name || ({ bargeld: 'manuell erfasst' }[a.type] || a.type))}${a.last_sync_at ? (a.source === 'psd2' ? ' · abgerufen ' : ' · Import ') + new Date(a.last_sync_at).toLocaleString('de-DE', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span></span>
-      ${eur(Number(a.balance_cents))}</button>`).join('');
+  const [mf] = monthRange(0);
+  const monthSum = leaves().filter(x => x.booked_on >= mf && !isTransfer(x)).reduce((s, x) => s + Number(x.amount_cents), 0);
+  const f = freeToSpend();
+  const sug = S.contracts.filter(c => c.status === 'suggested').length;
+  const open = leaves().filter(x => !x.category_id).length;
+  const accs = S.accounts.map(a => rowBtn(a.source === 'psd2' ? 'sync' : 'open-account', `data-id="${a.id}"`,
+    `<span class="stack" style="gap:2px"><span style="font-size:16px">${esc(a.name)}</span><span class="muted" style="font-size:12px">${esc(a.bank_name || ({ bargeld: 'manuell erfasst' }[a.type] || a.type))}${a.last_sync_at ? (a.source === 'psd2' ? ' · abgerufen ' : ' · Import ') + new Date(a.last_sync_at).toLocaleString('de-DE', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span></span>`,
+    eur(Number(a.balance_cents)))).join('');
+  const next = f.upcoming.slice(0, 3).map(x => `<div class="row" style="min-height:52px"><span class="stack" style="gap:2px"><span style="font-size:15px">${esc(x.c.provider)}</span><span class="muted" style="font-size:12px">${fmtDay(x.d)}</span></span>${eur(Number(x.c.amount_cents))}</div>`).join('');
   return `<div class="scroll stack" style="gap:20px">
     <header style="display:flex;justify-content:space-between;align-items:center">
       <div class="stack" style="gap:4px"><span class="over">Gesamtsaldo</span><span class="muted" style="font-size:14px">${new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}</span></div>
@@ -367,219 +431,490 @@ function vHome() {
       <button class="btn" data-act="bank">Neu verbinden</button></div>`).join('')}
     <section class="stack" style="gap:8px">
       <div class="hero">${t < 0 ? '−' : ''}${main}<span class="c">,${cents} €</span></div>
-      ${S.tx.length ? `<span class="muted" style="font-size:13px">Diesen Monat: <span class="${monthSum >= 0 ? 'pos' : ''}">${eur(monthSum, true)}</span></span>` : ''}
+      <span class="muted" style="font-size:13px">Diesen Monat: <span class="${monthSum >= 0 ? 'pos' : ''}">${eur(monthSum, true)}</span> · ohne Umbuchungen</span>
     </section>
+    <button class="card tap" data-act="tab" data-tab="budget" style="padding:18px;display:flex;flex-direction:column;gap:12px;text-align:left;color:var(--text)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;width:100%"><span style="font-size:14px;font-weight:500">Frei verfügbar</span><span class="muted" style="font-size:12px">${f.label}</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;width:100%"><span style="font-size:30px;color:${f.free < 0 ? 'var(--danger)' : 'var(--accent)'}">${eur(f.free)}</span><span class="muted" style="font-size:13px">≈ ${eur(f.perDay)} pro Tag</span></div>
+      <span class="muted" style="font-size:12px">Girokonto ${eurPlain(giroBalance())} minus ${f.upcoming.length} offene Abbuchung${f.upcoming.length === 1 ? '' : 'en'} (${eurPlain(-f.sumUp)})</span>
+    </button>
+    ${sug || open ? `<div class="stack" style="gap:8px">
+      ${sug ? `<button class="card tap" data-act="tab" data-tab="contracts" style="padding:14px;display:flex;align-items:center;gap:12px;color:var(--text);text-align:left;border-color:rgba(200,176,122,.45)"><span style="flex:1;font-size:14px">${sug} Vertrag${sug === 1 ? '' : 'e'} erkannt – bitte prüfen</span><span style="color:var(--accent)">${svg('chev', 18)}</span></button>` : ''}
+      ${open ? `<button class="card tap" data-act="open-uncat" style="padding:14px;display:flex;align-items:center;gap:12px;color:var(--text);text-align:left"><span style="flex:1;font-size:14px">${open} Buchungen ohne Kategorie</span><span class="muted">${svg('chev', 18)}</span></button>` : ''}
+    </div>` : ''}
+    ${next ? `<section class="stack"><span class="over" style="margin-bottom:4px">Demnächst</span>${next}</section>` : ''}
     <section class="stack">
       <span class="over" style="margin-bottom:4px">Konten</span>
-      ${accs || '<div class="empty">Noch kein Konto. Lege eins an und lade eine CSV aus deinem Online-Banking hoch.</div>'}
-      <button class="row tap" data-act="add" style="width:100%;background:none;border:0;padding:0;text-align:left;color:var(--text)">
-        <span class="stack" style="gap:2px"><span style="font-size:16px">Konto hinzufügen</span><span class="muted" style="font-size:12px">Bank verbinden, Bargeld oder CSV</span></span>
-        <span style="color:var(--accent)">${svg('plus', 20)}</span></button>
+      ${accs || '<div class="empty">Noch kein Konto. Verbinde deine Bank.</div>'}
+      ${rowBtn('add', '', `<span class="stack" style="gap:2px"><span style="font-size:16px">Konto hinzufügen</span><span class="muted" style="font-size:12px">Bank verbinden, Bargeld oder CSV</span></span>`, `<span style="color:var(--accent)">${svg('plus', 20)}</span>`)}
     </section>
-    ${S.accounts.length ? '' : `<button class="btn primary block" data-act="bank">Bank verbinden</button>`}
     <button class="btn block" data-act="logout" style="background:transparent;color:var(--muted);font-weight:400">Abmelden</button>
   </div>`;
 }
 
 function filteredTx() {
   const q = S.q.trim().toLowerCase();
-  return S.tx.filter(x => {
-    if (x.is_split_parent) return false;
+  return leaves().filter(x => {
     if (S.filter === 'out' && x.amount_cents > 0) return false;
     if (S.filter === 'in' && x.amount_cents < 0) return false;
     if (S.filter === 'open' && x.category_id) return false;
+    if (S.catFilter && x.category_id !== S.catFilter) return false;
     if (!q) return true;
     const amt = (Math.abs(x.amount_cents) / 100).toFixed(2).replace('.', ',');
-    return (x.counterparty || '').toLowerCase().includes(q) || (x.purpose || '').toLowerCase().includes(q) || amt.includes(q.replace('-', ''));
+    const cat = (S.cats[x.category_id] || {}).name || '';
+    return (x.counterparty || '').toLowerCase().includes(q) || (x.purpose || '').toLowerCase().includes(q) || (x.note || '').toLowerCase().includes(q) || cat.toLowerCase().includes(q) || amt.includes(q.replace('-', ''));
   });
 }
-
+function txRow(x, acc) {
+  const name = x.counterparty || 'Ohne Angaben der Bank';
+  const cat = S.cats[x.category_id];
+  const sub = cat ? esc(cat.name) : '<span style="color:var(--accent)">Kategorie wählen</span>';
+  return `<button class="tx tap" data-act="tx" data-id="${x.id}"><span class="av${cat ? '' : ' open'}" aria-hidden="true">${esc(name.trim().charAt(0).toUpperCase() || '?')}</span>
+    <span class="t"><b>${esc(name)}</b><span>${sub} · ${esc(acc[x.account_id] || '')}${x.status === 'pending' ? ' · vorgemerkt' : ''}${x.parent_id ? ' · Teilbetrag' : ''}${x.note ? ' · ' + esc(x.note) : ''}</span></span>
+    <span class="${x.amount_cents > 0 ? 'pos' : ''}" style="font-size:15px">${eur(Number(x.amount_cents), true)}</span></button>`;
+}
 function vTx() {
   const list = filteredTx();
-  const open = S.tx.filter(x => !x.category_id && !x.is_split_parent).length;
+  const open = leaves().filter(x => !x.category_id).length;
   const acc = Object.fromEntries(S.accounts.map(a => [a.id, a.name]));
   const groups = [];
-  for (const x of list.slice(0, 300)) {
-    const g = groups[groups.length - 1];
-    if (g && g.d === x.booked_on) g.items.push(x); else groups.push({ d: x.booked_on, items: [x] });
-  }
-  const body = groups.map(g => {
-    const sum = g.items.reduce((s, x) => s + Number(x.amount_cents), 0);
-    return `<div style="display:flex;justify-content:space-between;padding-top:8px"><span class="over">${esc(fmtDay(g.d))}</span><span class="muted" style="font-size:12px">${eur(sum, true)}</span></div>` +
-      g.items.map(x => {
-        const name = x.counterparty || x.purpose || 'Ohne Empfänger';
-        const cat = S.cats[x.category_id];
-        const sub = cat ? esc(cat.name) : '<span style="color:var(--accent)">Kategorie wählen</span>';
-        return `<div class="tx"><span class="av${cat ? '' : ' open'}" aria-hidden="true">${esc(name.trim().charAt(0).toUpperCase() || '?')}</span>
-          <span class="t"><b>${esc(name)}</b><span>${sub} · ${esc(acc[x.account_id] || '')}${x.status === 'pending' ? ' · vorgemerkt' : ''}</span></span>
-          <span class="${x.amount_cents > 0 ? 'pos' : ''}" style="font-size:15px">${eur(Number(x.amount_cents), true)}</span></div>`;
-      }).join('');
-  }).join('');
+  for (const x of list.slice(0, 300)) { const g = groups[groups.length - 1]; if (g && g.d === x.booked_on) g.items.push(x); else groups.push({ d: x.booked_on, items: [x] }); }
+  const body = groups.map(g => `<div style="display:flex;justify-content:space-between;padding-top:8px"><span class="over">${esc(fmtDay(g.d))}</span><span class="muted" style="font-size:12px">${eur(g.items.reduce((s, x) => s + Number(x.amount_cents), 0), true)}</span></div>` + g.items.map(x => txRow(x, acc)).join('')).join('');
   const chip = (k, l) => `<button class="chip${S.filter === k ? ' on' : ''}" data-act="filter" data-f="${k}" aria-pressed="${S.filter === k}">${l}</button>`;
+  const cf = S.catFilter ? S.cats[S.catFilter] : null;
   return `<div class="scroll stack" style="gap:16px">
     <header style="display:flex;justify-content:space-between;align-items:flex-end">
-      <div class="stack" style="gap:4px"><h1>Umsätze</h1><span class="muted" style="font-size:13px">${S.tx.length} Buchungen · alle Konten</span></div>
-      ${S.accounts.length ? `<button class="icon-btn gold" data-act="import" aria-label="CSV importieren">${svg('upload', 18, 2)}</button>` : ''}
+      <div class="stack" style="gap:4px"><h1>Umsätze</h1><span class="muted" style="font-size:13px">${leaves().length} Buchungen · alle Konten</span></div>
+      <button class="icon-btn gold" data-act="new-tx" aria-label="Buchung erfassen">${svg('plus', 18, 2)}</button>
     </header>
     <label class="field" style="flex-direction:row;align-items:center"><span class="sr">Umsätze durchsuchen</span>
-      <input id="q" type="search" enterkeyhint="search" placeholder="Händler, Zweck oder Betrag" value="${esc(S.q)}" style="flex:1"></label>
+      <input id="q" type="search" enterkeyhint="search" placeholder="Händler, Zweck, Kategorie oder Betrag" value="${esc(S.q)}" style="flex:1"></label>
     <div class="chips" role="group" aria-label="Filter">${chip('all', 'Alle')}${chip('out', 'Ausgaben')}${chip('in', 'Eingänge')}${chip('open', 'Offen ' + open)}</div>
-    <section class="stack" style="gap:8px">${body || `<div class="empty">${S.tx.length ? 'Nichts gefunden.' : 'Noch keine Umsätze. Importiere eine CSV aus deinem Online-Banking.'}</div>`}</section>
+    ${cf ? `<button class="chip on" data-act="clear-cat" style="align-self:flex-start">${esc(cf.name)} ✕</button>` : ''}
+    <section class="stack" style="gap:8px">${body || `<div class="empty">${S.tx.length ? 'Nichts gefunden.' : 'Noch keine Umsätze.'}</div>`}</section>
     ${list.length > 300 ? '<p class="muted" style="font-size:12px;text-align:center">Die ersten 300 Treffer. Suche eingrenzen für mehr.</p>' : ''}
   </div>`;
 }
 
-function vSoon(title, text) {
-  return `<div class="scroll stack" style="gap:16px"><h1>${title}</h1><div class="empty">${text}</div></div>`;
+function vContracts() {
+  const act = S.contracts.filter(c => c.status === 'active' && !c.is_income);
+  const inc = S.contracts.filter(c => c.status === 'active' && c.is_income);
+  const sug = S.contracts.filter(c => c.status === 'suggested');
+  const gone = S.contracts.filter(c => c.status === 'cancel_sent' || c.status === 'cancelled');
+  const perMonth = act.reduce((s, c) => s + Number(c.amount_cents) * PER_MONTH[c.interval], 0);
+  const item = c => {
+    const cb = cancelBy(c);
+    const warn = cb && daysBetween(TODAY(), cb) <= 30 && daysBetween(TODAY(), cb) >= 0;
+    return rowBtn('contract', `data-id="${c.id}"`, `<span class="stack" style="gap:2px"><span style="font-size:15px;font-weight:500">${esc(c.provider)}</span><span style="font-size:12px;color:${warn ? 'var(--danger)' : 'var(--muted)'}">${warn ? `Kündigen bis ${fmtDate(cb)} · noch ${daysBetween(TODAY(), cb)} Tage` : (c.status === 'cancel_sent' ? 'Kündigung verschickt' : c.status === 'cancelled' ? 'gekündigt' : `${INTERVAL[c.interval]} · fällig ${fmtDate(c.next_due_on)}`)}</span></span>`,
+      `<span style="text-align:right">${eur(Number(c.amount_cents))}<span class="muted" style="display:block;font-size:12px">${INTERVAL[c.interval]}</span></span>`);
+  };
+  const byIv = {};
+  for (const c of act) (byIv[c.interval] = byIv[c.interval] || []).push(c);
+  return `<div class="scroll stack" style="gap:18px">
+    <header style="display:flex;justify-content:space-between;align-items:flex-end">
+      <div class="stack" style="gap:4px"><h1>Verträge</h1><span class="muted" style="font-size:13px">${act.length} aktiv · ≈ ${eurPlain(-perMonth)} pro Monat</span></div>
+      <button class="icon-btn gold" data-act="new-contract" aria-label="Vertrag hinzufügen">${svg('plus', 18, 2)}</button>
+    </header>
+    ${sug.map(c => `<section class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px;border-color:rgba(200,176,122,.45)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="over" style="color:var(--accent)">Neu erkannt</span><span class="muted" style="font-size:12px">${INTERVAL[c.interval]}</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><span style="font-size:16px;font-weight:500">${esc(c.provider)}</span>${eur(Number(c.amount_cents))}</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn primary" style="flex:1" data-act="c-accept" data-id="${c.id}">${c.is_income ? 'Ist eine Einnahme' : 'Ist ein Vertrag'}</button>
+        <button class="btn" style="flex:1" data-act="c-dismiss" data-id="${c.id}">${c.is_income ? 'Nein' : 'Kein Vertrag'}</button>
+      </div></section>`).join('')}
+    ${Object.keys(INTERVAL).filter(k => byIv[k]).map(k => `<section class="card" style="padding:4px 16px"><span style="display:block;padding-top:12px" class="over">${INTERVAL[k]}</span>${byIv[k].map(item).join('')}</section>`).join('')}
+    ${inc.length ? `<section class="card" style="padding:4px 16px"><span style="display:block;padding-top:12px" class="over">Regelmäßige Einnahmen</span>${inc.map(item).join('')}</section>` : ''}
+    ${!act.length && !sug.length ? '<div class="empty">Noch keine Verträge. Sie werden aus deinen Umsätzen erkannt, sobald eine Zahlung mindestens dreimal regelmäßig kam.</div>' : ''}
+    ${gone.length ? `<section class="card" style="padding:4px 16px"><span style="display:block;padding-top:12px" class="over">Gekündigt</span>${gone.map(item).join('')}</section>` : ''}
+    <button class="btn block" data-act="detect" style="background:transparent;color:var(--muted);font-weight:400">Verträge neu erkennen</button>
+    <span class="muted" style="font-size:12px">Kündigungsfristen kannst du mit einem Tipp ins Jarvis-Cockpit legen.</span>
+  </div>`;
+}
+function cancelBy(c) {
+  if (!c.notice_period_days) return null;
+  const end = c.min_term_end_on || (c.status === 'active' ? c.next_due_on : null);
+  return end ? addDays(end, -Number(c.notice_period_days)) : null;
 }
 
+function vBudget() {
+  const f = freeToSpend(), fc = forecast(30);
+  const W = 326, H = 96, pad = 6;
+  const vals = fc.pts.map(p => p.v); let mx = Math.max(...vals), mn = Math.min(...vals); const padv = Math.max(2000, (mx - mn) * 0.15); mx += padv; mn -= padv;
+  const y = v => pad + (H - 2 * pad) * (1 - (v - mn) / ((mx - mn) || 1));
+  const pts = fc.pts.map((p, i) => `${Math.round(i / (fc.pts.length - 1) * W)},${Math.round(y(p.v))}`).join(' ');
+  const zero = mn < 0 ? `<line x1="0" y1="${y(0)}" x2="${W}" y2="${y(0)}" stroke="var(--danger)" stroke-dasharray="3 4" stroke-width="1"/>` : '';
+  const [mf, me] = monthRange(0);
+  const budgets = S.budgets.map(b => { const c = S.cats[b.category_id] || { name: '?' }; const sp = spentIn(b.category_id, mf, me); const pct = Math.round(sp / b.amount_cents * 100); return { b, c, sp, pct }; }).sort((a, b) => b.pct - a.pct);
+  const ms = monthStats(6); const mmax = Math.max(1, ...ms.map(m => Math.max(m.inc, m.out)));
+  const catTot = {};
+  for (const t of leaves().filter(t => t.booked_on >= mf && t.amount_cents < 0 && !isTransfer(t))) catTot[t.category_id || ''] = (catTot[t.category_id || ''] || 0) - Number(t.amount_cents);
+  const tops = Object.entries(catTot).sort((a, b) => b[1] - a[1]).slice(0, 7); const tmax = Math.max(1, ...tops.map(x => x[1]));
+  return `<div class="scroll stack" style="gap:20px">
+    <header class="stack" style="gap:4px"><h1>Budget</h1><span class="muted" style="font-size:13px">Frei verfügbar ${f.label}</span></header>
+    <section class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="muted" style="font-size:14px">Frei verfügbar</span><span class="muted" style="font-size:12px">≈ ${eurPlain(f.perDay)} / Tag · ${f.days} Tage</span></div>
+      <span style="font-size:36px;color:${f.free < 0 ? 'var(--danger)' : 'var(--accent)'}">${eur(f.free)}</span>
+      ${!f.income ? `<span class="muted" style="font-size:12px;line-height:17px">Kein regelmäßiges Einkommen bestätigt – Zeitraum bis Monatsende. Bestätige BAföG/Gehalt unter Verträge, dann rechnet die App von Zahltag zu Zahltag.</span>` : ''}
+      <div class="stack">${f.upcoming.slice(0, 5).map(x => `<div class="kv"><span>${fmtDate(x.d)} · ${esc(x.c.provider)}</span>${eur(Number(x.c.amount_cents))}</div>`).join('') || '<span class="muted" style="font-size:13px">Keine Vertragsabbuchungen mehr im Zeitraum.</span>'}</div>
+    </section>
+    <section class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:14px;font-weight:500">Prognose Girokonto</span><span class="muted" style="font-size:12px">in 30 Tagen: ${eurPlain(fc.pts[fc.pts.length - 1].v)}</span></div>
+      <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Kontostand von ${eurPlain(fc.pts[0].v)} heute auf ${eurPlain(fc.pts[fc.pts.length - 1].v)} in 30 Tagen, tiefster Stand ${eurPlain(fc.min)}">
+        ${zero}<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
+      <div style="display:flex;justify-content:space-between;font-size:12px" class="muted"><span>heute</span><span>tiefster Stand ${eurPlain(fc.min)}</span><span>${fmtDate(fc.end)}</span></div>
+      <span class="muted" style="font-size:12px">Nur bekannte Verträge und Einnahmen – spontane Ausgaben sind nicht eingerechnet.</span>
+    </section>
+    <section class="stack" style="gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span class="over">Budgets · ${new Date().toLocaleDateString('de-DE', { month: 'long' })}</span><button class="btn" data-act="new-budget" style="height:36px">+ Budget</button></div>
+      ${budgets.map(({ b, c, sp, pct }) => `<button class="card tap" data-act="budget" data-id="${b.id}" style="padding:14px;display:flex;flex-direction:column;gap:8px;text-align:left;color:var(--text)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;width:100%"><span style="font-size:15px;font-weight:500">${esc(c.name)}</span><span style="font-size:15px;color:${pct > 100 ? 'var(--danger)' : 'var(--text)'}">${eurPlain(sp)}<span class="muted" style="font-size:12px"> / ${eurPlain(b.amount_cents)}</span></span></div>
+        <div class="bar" style="width:100%"><i style="width:${Math.min(100, pct)}%;background:${pct > 100 ? 'var(--danger)' : pct > 85 ? '#D9A55B' : 'var(--accent)'}"></i></div>
+        <span style="font-size:12px;color:${pct > 100 ? 'var(--danger)' : 'var(--muted)'}">${pct > 100 ? eurPlain(sp - b.amount_cents) + ' über dem Budget' : 'noch ' + eurPlain(b.amount_cents - sp)}</span></button>`).join('') || '<div class="empty">Noch keine Budgets. Lege z. B. eins für Lebensmittel oder Ausgehen an.</div>'}
+    </section>
+    <section class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px">
+      <span style="font-size:14px;font-weight:500">Einnahmen und Ausgaben</span>
+      <div style="display:grid;grid-template-columns:repeat(${ms.length},minmax(0,1fr));gap:8px;align-items:end;height:110px" role="img" aria-label="Letzte ${ms.length} Monate: ${ms.map(m => `${m.label} Einnahmen ${eurPlain(m.inc)}, Ausgaben ${eurPlain(m.out)}`).join('; ')}">
+        ${ms.map(m => `<div style="display:flex;gap:3px;align-items:end;justify-content:center;height:100%"><i style="display:block;width:9px;border-radius:3px 3px 0 0;background:var(--income);height:${Math.max(2, m.inc / mmax * 100)}%"></i><i style="display:block;width:9px;border-radius:3px 3px 0 0;background:var(--muted);height:${Math.max(2, m.out / mmax * 100)}%"></i></div>`).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(${ms.length},minmax(0,1fr));gap:8px;font-size:12px;text-align:center" class="muted">${ms.map(m => `<span>${m.label}</span>`).join('')}</div>
+      <div style="display:flex;gap:16px;font-size:12px" class="muted"><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--income)"></i> Einnahmen</span><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--muted)"></i> Ausgaben</span><span>ohne Umbuchungen</span></div>
+    </section>
+    <section class="card" style="padding:4px 16px 8px">
+      <span class="over" style="display:block;padding:12px 0 4px">Ausgaben ${new Date().toLocaleDateString('de-DE', { month: 'long' })}</span>
+      ${tops.map(([id, v]) => rowBtn('cat-tx', `data-id="${id}"`, `<span class="stack" style="gap:6px;flex:1;margin-right:12px"><span style="font-size:14px">${esc((S.cats[id] || {}).name || 'Ohne Kategorie')}</span><span class="bar" style="height:6px"><i style="width:${v / tmax * 100}%;height:2px;background:var(--accent)"></i></span></span>`, `<span style="font-size:14px">${eurPlain(v)}</span>`)).join('') || '<p class="muted" style="font-size:13px">Noch keine Ausgaben diesen Monat.</p>'}
+    </section>
+  </div>`;
+}
+
+/* ===== Sheets ===== */
+function catGrid(sel, act, extra = '') {
+  const kinds = [['expense', 'Ausgaben'], ['income', 'Einnahmen'], ['transfer', 'Umbuchungen']];
+  return kinds.map(([k, l]) => { const cs = S.catList.filter(c => c.kind === k); return cs.length ? `<span class="over" style="font-size:11px">${l}</span><div class="grid-cats">${cs.map(c => `<button type="button" class="cat-btn${c.id === sel ? ' on' : ''}" data-act="${act}" data-cat="${c.id}" ${extra}>${esc(c.name)}</button>`).join('')}</div>` : ''; }).join('');
+}
 function vSheet() {
-  if (!S.sheet) return '';
-  const close = `<button class="icon-btn" data-act="close" aria-label="Schließen">${svg('close', 16)}</button>`;
-  if (S.sheet.kind === 'add') {
-    const opt = (act, t, d) => `<button class="row tap" data-act="${act}" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;padding:0;text-align:left;color:var(--text)"><span class="stack" style="gap:2px"><span style="font-size:16px">${t}</span><span class="muted" style="font-size:12px">${d}</span></span><span style="color:var(--accent)">${svg('plus', 18)}</span></button>`;
-    return `<div class="sheet-bg" data-act="close-bg"><div class="sheet" role="dialog" aria-label="Konto hinzufügen">
-      <div style="display:flex;justify-content:space-between;align-items:center"><span class="over" style="color:var(--accent)">Konto hinzufügen</span>${close}</div>
-      <div class="stack">${opt('bank', 'Bank verbinden', 'Automatisch, nur lesend – Sparkasse, Trade Republic …')}${opt('new-account', 'Bargeld oder manuelles Konto', 'Buchungen selbst erfassen')}${S.accounts.length ? opt('import', 'CSV importieren', 'Für Banken ohne Anbindung') : ''}</div></div></div>`;
+  const sh = S.sheet; if (!sh) return '';
+  const wrap = (label, inner, isForm = false, id = '') => `<div class="sheet-bg" data-act="close-bg"><${isForm ? 'form' : 'div'} class="sheet"${id ? ` id="${id}"` : ''} role="dialog" aria-label="${label}">${inner}</${isForm ? 'form' : 'div'}></div>`;
+  if (sh.kind === 'add') {
+    const opt = (act, t, d) => rowBtn(act, '', `<span class="stack" style="gap:2px"><span style="font-size:16px">${t}</span><span class="muted" style="font-size:12px">${d}</span></span>`, `<span style="color:var(--accent)">${svg('plus', 18)}</span>`);
+    return wrap('Konto hinzufügen', sheetHead('Konto hinzufügen') + `<div class="stack">${opt('bank', 'Bank verbinden', 'Automatisch, nur lesend')}${opt('new-account', 'Bargeld oder manuelles Konto', 'Buchungen selbst erfassen')}${S.accounts.length ? opt('import', 'CSV importieren', 'Für Banken ohne Anbindung') : ''}</div>`);
   }
-  if (S.sheet.kind === 'bank') {
-    const sh = S.sheet;
-    const head = `<div style="display:flex;justify-content:space-between;align-items:center"><span class="over" style="color:var(--accent)">Bank verbinden</span>${close}</div>`;
-    const safe = `<div class="card" style="padding:14px;font-size:13px;line-height:19px;color:var(--muted)"><b style="color:var(--text);font-weight:500">Nur lesend.</b> Die App sieht Kontostand und Umsätze, kann aber nie Geld bewegen. Ihre PIN und TAN geben Sie nur auf der Seite Ihrer Bank ein – die App sieht sie nie. Freigabe max. 180 Tage, jederzeit widerrufbar.</div>`;
+  if (sh.kind === 'bank') {
+    const safe = `<div class="card" style="padding:14px;font-size:13px;line-height:19px;color:var(--muted)"><b style="color:var(--text);font-weight:500">Nur lesend.</b> Die App sieht Kontostand und Umsätze, kann aber nie Geld bewegen. PIN und TAN gibst du nur auf der Seite deiner Bank ein. Freigabe max. 180 Tage, jederzeit widerrufbar.</div>`;
     let body = '';
     if (sh.step === 'loading') body = '<p class="muted">Lade …</p>';
     else if (sh.step === 'error') body = `<p class="err" role="alert">${esc(sh.err)}</p>`;
-    else if (sh.step === 'setup') body = `
-      <p style="margin:0;font-size:14px;line-height:21px">Einmalig: Zugang bei <b style="font-weight:500">Enable Banking</b> anlegen (kostenlos für private Nutzung, am besten am Mac):</p>
-      <ol style="margin:0;padding-left:20px;font-size:14px;line-height:22px;color:var(--muted)">
-        <li>enablebanking.com → Sign in mit Ihrer E-Mail</li>
-        <li>API applications → Add a new application → Environment <b style="color:var(--text);font-weight:500">Production</b></li>
-        <li>Redirect URL eintragen:<br><code style="font-size:12px;color:var(--text);word-break:break-all;user-select:all">${esc(sh.redirect)}</code></li>
-        <li>Register → eine <b style="color:var(--text);font-weight:500">.pem</b>-Datei wird heruntergeladen (Name = App-ID)</li>
-        <li>„Activate by linking accounts“ → Sparkasse und Trade Republic verknüpfen</li>
-        <li>Hier App-ID und .pem-Datei hochladen</li>
-      </ol>
+    else if (sh.step === 'setup') body = `<p style="margin:0;font-size:14px;line-height:21px">Einmalig bei <b style="font-weight:500">Enable Banking</b> eine Production-App anlegen, Redirect URL:<br><code style="font-size:12px;word-break:break-all;user-select:all">${esc(sh.redirect)}</code><br>Konten mit „Activate by linking accounts“ verknüpfen, dann hier App-ID und .pem hochladen.</p>
       <form id="eb-form" class="stack" style="gap:14px">
-        <label class="field">App-ID<input name="app" autocomplete="off" autocapitalize="none" autocorrect="off" placeholder="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" required></label>
-        <label class="field">Schlüsseldatei (.pem)<input name="pem" type="file" accept=".pem,application/x-pem-file,text/plain" required style="padding:10px 14px;height:auto"></label>
+        <label class="field">App-ID<input name="app" autocomplete="off" autocapitalize="none" autocorrect="off" required></label>
+        <label class="field">Schlüsseldatei (.pem)<input name="pem" type="file" accept=".pem,text/plain" required style="padding:10px 14px;height:auto"></label>
         ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}
-        <button class="btn primary block" type="submit"${sh.busy ? ' disabled' : ''}>${sh.busy ? 'Prüfe Schlüssel …' : 'Speichern und prüfen'}</button>
-      </form>`;
+        <button class="btn primary block" type="submit"${sh.busy ? ' disabled' : ''}>${sh.busy ? 'Prüfe …' : 'Speichern und prüfen'}</button></form>`;
     else {
-      const q = (sh.q || '').toLowerCase();
-      const fav = ['Sparkasse LeerWittmund', 'Trade Republic'];
+      const q = (sh.q || '').toLowerCase(); const fav = ['Sparkasse LeerWittmund', 'Trade Republic'];
       const list = sh.list.filter(a => !q || a.name.toLowerCase().includes(q)).sort((a, b) => (fav.some(f => b.name.includes(f)) - fav.some(f => a.name.includes(f))) || a.name.localeCompare(b.name)).slice(0, 40);
-      body = `<label class="field"><span class="sr">Bank suchen</span><input id="bq" type="search" placeholder="Bank suchen, z. B. LeerWittmund" value="${esc(sh.q || '')}" autocomplete="off"></label>
-        <div class="stack">${list.map(a => `<button class="row tap" data-act="pick-bank" data-name="${esc(a.name)}" data-max="${a.max || ''}" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;padding:0;text-align:left;color:var(--text)"${sh.busy ? ' disabled' : ''}>
-          <span style="font-size:15px">${esc(a.name)}${a.beta ? ' <span class="muted" style="font-size:12px">(Beta)</span>' : ''}</span><span class="muted" style="font-size:13px">${sh.busy === a.name ? 'öffne Bank …' : ''}</span></button>`).join('') || '<p class="muted">Keine Bank gefunden.</p>'}</div>
+      body = `<label class="field"><span class="sr">Bank suchen</span><input id="bq" type="search" placeholder="Bank suchen" value="${esc(sh.q || '')}" autocomplete="off"></label>
+        <div class="stack">${list.map(a => rowBtn('pick-bank', `data-name="${esc(a.name)}" data-max="${a.max || ''}"${sh.busy ? ' disabled' : ''}`, `<span style="font-size:15px">${esc(a.name)}</span>`, `<span class="muted" style="font-size:13px">${sh.busy === a.name ? 'öffne Bank …' : ''}</span>`)).join('') || '<p class="muted">Keine Bank gefunden.</p>'}</div>
         ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}`;
     }
-    return `<div class="sheet-bg" data-act="close-bg"><div class="sheet" role="dialog" aria-label="Bank verbinden">${head}${safe}${body}</div></div>`;
+    return wrap('Bank verbinden', sheetHead('Bank verbinden') + safe + body);
   }
-  if (S.sheet.kind === 'account') {
-    return `<div class="sheet-bg" data-act="close-bg"><form class="sheet" id="acc-form" role="dialog" aria-label="Konto anlegen">
-      <div style="display:flex;justify-content:space-between;align-items:center"><span class="over" style="color:var(--accent)">Neues Konto</span>${close}</div>
-      <label class="field">Name<input name="name" required placeholder="Girokonto" autocomplete="off" value="${esc((S.sheet.v||{}).name)}"></label>
-      <label class="field">Bank<input name="bank" placeholder="Sparkasse LeerWittmund" autocomplete="off" value="${esc((S.sheet.v||{}).bank)}"></label>
-      <label class="field">Art<select name="type"><option value="giro">Girokonto</option><option value="tagesgeld">Tagesgeld / Verrechnungskonto</option><option value="bargeld">Bargeld</option><option value="depot">Depot</option><option value="krypto">Krypto</option></select></label>
-      <label class="field">Aktueller Kontostand in €<input name="bal" inputmode="decimal" placeholder="0,00" required value="${esc((S.sheet.v||{}).bal)}"></label>
-      ${S.sheet.err ? `<p class="err" role="alert">${esc(S.sheet.err)}</p>` : ''}
-      <button class="btn primary block" type="submit">Konto anlegen</button></form></div>`;
+  if (sh.kind === 'account') {
+    const v = sh.v || {};
+    return wrap('Konto anlegen', sheetHead('Neues Konto') + `
+      <label class="field">Name<input name="name" required placeholder="Bargeld" autocomplete="off" value="${esc(v.name)}"></label>
+      <label class="field">Art<select name="type"><option value="bargeld">Bargeld</option><option value="giro">Girokonto</option><option value="tagesgeld">Tagesgeld</option><option value="depot">Depot</option><option value="krypto">Krypto</option></select></label>
+      <label class="field">Aktueller Stand in €<input name="bal" inputmode="decimal" placeholder="0,00" required value="${esc(v.bal)}"></label>
+      ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}
+      <button class="btn primary block" type="submit">Konto anlegen</button>`, true, 'acc-form');
   }
-  if (S.sheet.kind === 'import') {
-    const r = S.sheet.result;
-    const opts = S.accounts.map(a => `<option value="${a.id}"${a.id === S.sheet.acc ? ' selected' : ''}>${esc(a.name)}</option>`).join('');
-    return `<div class="sheet-bg" data-act="close-bg"><form class="sheet" id="imp-form" role="dialog" aria-label="CSV importieren">
-      <div style="display:flex;justify-content:space-between;align-items:center"><span class="over" style="color:var(--accent)">CSV importieren</span>${close}</div>
-      ${r ? `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:6px;font-size:14px">
-          <b style="font-weight:500">${r.inserted} neue Buchungen</b>
-          <span class="muted">${r.skipped} schon vorhanden${r.bad ? ` · ${r.bad} Zeilen nicht lesbar` : ''}</span></div>
-          <button class="btn primary block" type="button" data-act="close">Fertig</button>` : `
-      <p class="muted" style="margin:0;font-size:14px;line-height:20px">Sparkasse: Umsätze → Export → <b style="color:var(--text);font-weight:500">CSV-CAMT</b>. Doppelte Buchungen werden automatisch übersprungen.</p>
+  if (sh.kind === 'import') {
+    const r = sh.result;
+    const opts = S.accounts.map(a => `<option value="${a.id}"${a.id === sh.acc ? ' selected' : ''}>${esc(a.name)}</option>`).join('');
+    return wrap('CSV importieren', sheetHead('CSV importieren') + (r ? `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:6px;font-size:14px"><b style="font-weight:500">${r.inserted} neue Buchungen</b><span class="muted">${r.skipped} schon vorhanden${r.bad ? ` · ${r.bad} Zeilen nicht lesbar` : ''}</span></div><button class="btn primary block" type="button" data-act="close">Fertig</button>` : `
+      <p class="muted" style="margin:0;font-size:14px;line-height:20px">Doppelte Buchungen werden automatisch übersprungen.</p>
       <label class="field">Konto<select name="acc">${opts}</select></label>
       <label class="field">Datei<input name="file" type="file" accept=".csv,text/csv,text/plain" required style="padding:10px 14px;height:auto"></label>
-      <label class="field">Kontostand jetzt laut Bank-App (optional)<input name="bal" inputmode="decimal" placeholder="unverändert lassen"></label>
-      ${S.sheet.err ? `<p class="err" role="alert">${esc(S.sheet.err)}</p>` : ''}
-      <button class="btn primary block" type="submit"${S.sheet.busy ? ' disabled' : ''}>${S.sheet.busy ? 'Importiere …' : 'Importieren'}</button>`}
-      </form></div>`;
+      <label class="field">Kontostand jetzt (optional)<input name="bal" inputmode="decimal" placeholder="unverändert lassen"></label>
+      ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}
+      <button class="btn primary block" type="submit"${sh.busy ? ' disabled' : ''}>${sh.busy ? 'Importiere …' : 'Importieren'}</button>`), true, 'imp-form');
+  }
+  if (sh.kind === 'tx') {
+    const t = S.tx.find(x => x.id === sh.id); if (!t) return '';
+    const acc = S.accounts.find(a => a.id === t.account_id) || {};
+    const parts = S.tx.filter(x => x.parent_id === t.id);
+    const ctr = S.contracts.find(c => c.id === t.contract_id);
+    if (sh.split) {
+      return wrap('Buchung aufteilen', sheetHead('Aufteilen') + `
+        <div class="kv"><span>Gesamt</span>${eur(Number(t.amount_cents))}</div>
+        <label class="field">Teilbetrag in €<input name="part" inputmode="decimal" required placeholder="z. B. 12,50" value="${esc(sh.part || '')}"></label>
+        <span class="over" style="font-size:11px">Kategorie Teilbetrag</span>${catGrid(sh.c1, 'split-c1')}
+        <span class="over" style="font-size:11px">Kategorie Rest</span>${catGrid(sh.c2, 'split-c2')}
+        ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}
+        <button class="btn primary block" type="submit">Aufteilen</button>`, true, 'split-form');
+    }
+    return wrap('Buchung', sheetHead(t.status === 'pending' ? 'Vorgemerkt' : 'Buchung') + `
+      <div class="stack" style="gap:4px;text-align:center;padding:4px 0 8px">
+        <span style="font-size:18px;font-weight:500">${esc(t.counterparty || 'Ohne Angaben der Bank')}</span>
+        <span style="font-size:32px" class="${t.amount_cents > 0 ? 'pos' : ''}">${eur(Number(t.amount_cents), true)}</span>
+        <span class="muted" style="font-size:13px">${fmtDate(t.booked_on, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · ${esc(acc.name || '')}</span>
+      </div>
+      ${t.purpose ? `<div class="card" style="padding:12px 14px;font-size:13px;line-height:19px;color:var(--muted);word-break:break-word;user-select:text">${esc(t.purpose)}</div>` : ''}
+      ${ctr ? `<button class="card tap" data-act="contract" data-id="${ctr.id}" style="padding:12px 14px;font-size:14px;color:var(--text);text-align:left">Gehört zum Vertrag <b style="font-weight:500">${esc(ctr.provider)}</b> (${INTERVAL[ctr.interval]})</button>` : ''}
+      ${t.is_split_parent ? `<div class="stack"><span class="over" style="font-size:11px">Aufgeteilt</span>${parts.map(p => `<div class="kv"><span>${esc((S.cats[p.category_id] || {}).name || 'ohne')}</span>${eur(Number(p.amount_cents))}</div>`).join('')}<button class="btn" data-act="unsplit" data-id="${t.id}">Aufteilung aufheben</button></div>` : `
+      <span class="over" style="font-size:11px">Kategorie</span>
+      ${catGrid(t.category_id, 'set-cat')}
+      ${t.counterparty ? `<label class="toggle"><span>Für alle von „${esc(t.counterparty)}“ merken</span><input type="checkbox" id="remember" ${sh.remember === false ? '' : 'checked'}></label>` : ''}`}
+      <label class="field">Notiz<textarea id="note" placeholder="z. B. Geschenk für …">${esc(t.note || '')}</textarea></label>
+      <div style="display:flex;gap:8px">
+        <button class="btn" style="flex:1" data-act="save-note" data-id="${t.id}">Notiz speichern</button>
+        ${!t.is_split_parent && !t.parent_id ? `<button class="btn" style="flex:1" data-act="split" data-id="${t.id}">Aufteilen</button>` : ''}
+      </div>
+      ${acc.source !== 'psd2' && !t.parent_id ? `<button class="btn block" data-act="del-tx" data-id="${t.id}" style="background:transparent;color:var(--danger);font-weight:400">Buchung löschen</button>` : ''}`);
+  }
+  if (sh.kind === 'new-tx') {
+    const manual = S.accounts.filter(a => a.source !== 'psd2');
+    if (!manual.length) return wrap('Buchung erfassen', sheetHead('Buchung erfassen') + `<p class="muted" style="font-size:14px;line-height:20px">Buchungen von Bankkonten kommen automatisch. Für Bargeld lege zuerst ein Bargeld-Konto an.</p><button class="btn primary block" data-act="new-account">Bargeld-Konto anlegen</button>`);
+    return wrap('Buchung erfassen', sheetHead('Buchung erfassen') + `
+      <div class="seg" role="group"><button type="button" class="${sh.dir !== 'in' ? 'on' : ''}" data-act="dir" data-d="out">Ausgabe</button><button type="button" class="${sh.dir === 'in' ? 'on' : ''}" data-act="dir" data-d="in">Einnahme</button></div>
+      <label class="field">Betrag in €<input name="amt" inputmode="decimal" required placeholder="0,00" value="${esc(sh.amt || '')}"></label>
+      <label class="field">Wofür<input name="cp" placeholder="z. B. Bäcker" autocomplete="off" value="${esc(sh.cp || '')}"></label>
+      <label class="field">Konto<select name="acc">${manual.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></label>
+      <label class="field">Datum<input name="day" type="date" value="${sh.day || TODAY()}" required></label>
+      <span class="over" style="font-size:11px">Kategorie</span>${catGrid(sh.cat, 'nt-cat')}
+      ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}
+      <button class="btn primary block" type="submit">Speichern</button>`, true, 'nt-form');
+  }
+  if (sh.kind === 'contract' || sh.kind === 'new-contract') {
+    const c = sh.kind === 'contract' ? S.contracts.find(x => x.id === sh.id) : { provider: '', amount_cents: 0, interval: 'monthly', status: 'active', next_due_on: TODAY() };
+    if (!c) return '';
+    const cb = cancelBy(c); const txs = S.tx.filter(t => t.contract_id === c.id).slice(0, 6);
+    return wrap('Vertrag', sheetHead(sh.kind === 'new-contract' ? 'Neuer Vertrag' : (c.is_income ? 'Einnahme' : 'Vertrag')) + `
+      <label class="field">Name<input name="provider" required value="${esc(c.provider)}" autocomplete="off"></label>
+      <div style="display:flex;gap:10px"><label class="field" style="flex:1">Betrag in €<input name="amt" inputmode="decimal" required value="${c.amount_cents ? (Math.abs(c.amount_cents) / 100).toFixed(2).replace('.', ',') : ''}"></label>
+      <label class="field" style="flex:1">Turnus<select name="interval">${Object.entries(INTERVAL).map(([k, l]) => `<option value="${k}"${c.interval === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label></div>
+      <div style="display:flex;gap:10px"><label class="field" style="flex:1">Nächste Fälligkeit<input name="next" type="date" value="${c.next_due_on || ''}"></label>
+      <label class="field" style="flex:1">Art<select name="income"><option value="0"${!c.is_income ? ' selected' : ''}>Ausgabe</option><option value="1"${c.is_income ? ' selected' : ''}>Einnahme / Gehalt</option></select></label></div>
+      ${!c.is_income ? `<div style="display:flex;gap:10px"><label class="field" style="flex:1">Kündigungsfrist (Tage)<input name="notice" inputmode="numeric" placeholder="z. B. 30" value="${c.notice_period_days ?? ''}"></label>
+      <label class="field" style="flex:1">Laufzeit bis<input name="term" type="date" value="${c.min_term_end_on || ''}"></label></div>
+      <div style="display:flex;gap:10px"><label class="field" style="flex:1">Kundennummer<input name="cust" autocomplete="off" value="${esc(c.customer_number || '')}"></label>
+      <label class="field" style="flex:1">Kündigungs-E-Mail<input name="mail" type="email" autocapitalize="none" value="${esc(c.cancel_email || '')}"></label></div>
+      ${cb ? (cb < TODAY() ? `<div class="kv"><span>Kündigungsfrist</span><span class="muted">am ${fmtDate(cb, { day: 'numeric', month: 'long' })} verstrichen – Laufzeit bis prüfen</span></div>` : `<div class="kv"><span>Kündigen spätestens</span><b style="font-weight:500;color:${daysBetween(TODAY(), cb) <= 30 ? 'var(--danger)' : 'var(--text)'}">${fmtDate(cb, { day: 'numeric', month: 'long', year: 'numeric' })}</b></div>`) : ''}` : ''}
+      ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}
+      <button class="btn primary block" type="submit">Speichern</button>
+      ${sh.kind === 'contract' && !c.is_income && c.status === 'active' ? `<div style="display:flex;gap:8px">
+        <button type="button" class="btn" style="flex:1" data-act="c-jarvis" data-id="${c.id}"${!cb || cb < TODAY() ? ' disabled' : ''}>${c.jarvis_task_id ? 'Im Cockpit ✓' : 'Frist ins Cockpit'}</button>
+        <button type="button" class="btn" style="flex:1" data-act="c-cancel" data-id="${c.id}">Kündigen</button></div>` : ''}
+      ${sh.kind === 'contract' && c.status === 'cancel_sent' ? `<button type="button" class="btn block" data-act="c-done" data-id="${c.id}">Kündigung bestätigt</button>` : ''}
+      ${txs.length ? `<div class="stack"><span class="over" style="font-size:11px">Letzte Zahlungen</span>${txs.map(t => `<div class="kv"><span>${fmtDate(t.booked_on, { day: 'numeric', month: 'short', year: '2-digit' })}</span>${eur(Number(t.amount_cents))}</div>`).join('')}</div>` : ''}
+      ${sh.kind === 'contract' ? `<button type="button" class="btn block" data-act="c-dismiss" data-id="${c.id}" style="background:transparent;color:var(--muted);font-weight:400">Kein Vertrag / entfernen</button>` : ''}`, true, 'c-form');
+  }
+  if (sh.kind === 'cancel') {
+    const c = S.contracts.find(x => x.id === sh.id);
+    return wrap('Kündigung', sheetHead('Kündigung') + `
+      <p class="muted" style="margin:0;font-size:13px;line-height:19px">Vorlage – bitte prüfen. Keine Rechtsberatung. Am sichersten ist eine Kündigung über den Kündigungsbutton auf der Website des Anbieters oder per E-Mail mit Bitte um Bestätigung.</p>
+      <textarea id="letter" style="min-height:220px">${esc(sh.letter)}</textarea>
+      <a class="btn primary block" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="mailto:${encodeURIComponent(c.cancel_email || '')}?subject=${encodeURIComponent('Kündigung ' + c.provider + (c.customer_number ? ' – Kundennr. ' + c.customer_number : ''))}&body=${encodeURIComponent(sh.letter)}" data-act="c-sent" data-id="${c.id}">In Mail-App öffnen</a>
+      <button class="btn block" data-act="copy-letter">Text kopieren</button>`);
+  }
+  if (sh.kind === 'budget') {
+    const b = sh.id ? S.budgets.find(x => x.id === sh.id) : null;
+    return wrap('Budget', sheetHead(b ? 'Budget ändern' : 'Neues Budget') + `
+      <label class="field">Monatsbetrag in €<input name="amt" inputmode="decimal" required placeholder="z. B. 250" value="${b ? (b.amount_cents / 100).toFixed(0) : esc(sh.amt || '')}"></label>
+      <span class="over" style="font-size:11px">Kategorie</span>${catGrid(sh.cat || (b && b.category_id), 'b-cat')}
+      ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}
+      <button class="btn primary block" type="submit">Speichern</button>
+      ${b ? `<button type="button" class="btn block" data-act="b-del" data-id="${b.id}" style="background:transparent;color:var(--danger);font-weight:400">Budget löschen</button>` : ''}`, true, 'b-form');
   }
   return '';
 }
 
 function render() {
   const el = $('#app');
-  const qFocus = document.activeElement && document.activeElement.id === 'q';
-  const pos = qFocus ? document.activeElement.selectionStart : null;
+  const act = document.activeElement; const fid = act && act.id; const pos = act && act.selectionStart != null ? act.selectionStart : null;
   const sc = el.querySelector('.scroll'); const top = sc ? sc.scrollTop : 0;
+  const ss = el.querySelector('.sheet'); const stop = ss ? ss.scrollTop : 0;
   document.body.classList.toggle('discreet', S.discreet);
-  if (!S.user) { el.innerHTML = vLogin(); return; }
+  if (!S.user) { el.innerHTML = vLogin() + (S.toast ? `<div class="toast" role="status">${esc(S.toast)}</div>` : ''); return; }
   let view;
   if (S.loading && !S.accounts.length && !S.tx.length) view = '<div class="scroll"><p class="muted">Lade …</p></div>';
-  else if (S.tab === 'home') view = vHome();
-  else if (S.tab === 'tx') view = vTx();
-  else if (S.tab === 'contracts') view = vSoon('Verträge', 'Kommt in Ausbaustufe 2: Verträge werden aus deinen Umsätzen erkannt, Fristen gehen ins Jarvis-Cockpit.');
-  else view = vSoon('Budget', 'Kommt in Ausbaustufe 2: frei verfügbar bis Gehalt, Prognose und Budgets je Kategorie.');
+  else view = { home: vHome, tx: vTx, contracts: vContracts, budget: vBudget }[S.tab]();
   const tab = (k, l, i) => `<button data-act="tab" data-tab="${k}"${S.tab === k ? ' aria-current="page"' : ''}>${svg(i, 22)}${l}</button>`;
   el.innerHTML = view + (S.err ? `<p class="err" style="padding:0 20px" role="alert">${esc(S.err)}</p>` : '') +
     `<nav class="nav" aria-label="Hauptnavigation">${tab('home', 'Übersicht', 'home')}${tab('tx', 'Umsätze', 'list')}${tab('contracts', 'Verträge', 'repeat')}${tab('budget', 'Budget', 'pie')}</nav>` +
     vSheet() + (S.toast ? `<div class="toast" role="status">${esc(S.toast)}</div>` : '');
-  const nsc = el.querySelector('.scroll'); if (nsc) nsc.scrollTop = top;
-  if (qFocus) { const q = $('#q'); q.focus(); q.setSelectionRange(pos, pos); }
+  const nsc = el.querySelector('.scroll'); if (nsc && !render.resetScroll) nsc.scrollTop = top; render.resetScroll = false;
+  const nss = el.querySelector('.sheet'); if (nss && !render.resetSheet) nss.scrollTop = stop; render.resetSheet = false;
+  if (fid && (fid === 'q' || fid === 'bq')) { const q = document.getElementById(fid); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
 }
+const openSheet = s => { S.sheet = s; render.resetSheet = true; render(); };
+const parseEuro = s => { s = (s || '').trim(); if (!s) return null; return Parser.parseAmount(s); };
 
-const parseEuro = s => { s = (s || '').trim(); if (!s) return null; const v = Parser.parseAmount(s); return v; };
+/* ===== Aktionen ===== */
+function letterFor(c) {
+  return `Sehr geehrte Damen und Herren,
 
-/* ===== Ereignisse ===== */
+hiermit kündige ich meinen Vertrag „${c.provider}“${c.customer_number ? ` (Kundennummer ${c.customer_number})` : ''} fristgerecht zum nächstmöglichen Zeitpunkt.
+
+Bitte bestätigen Sie mir die Kündigung sowie das Vertragsende schriftlich per E-Mail.
+
+Ich widerrufe hiermit zugleich eine erteilte Einzugsermächtigung bzw. ein SEPA-Lastschriftmandat zum Vertragsende.
+
+Mit freundlichen Grüßen
+${OWNER_NAME}`;
+}
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
-  const act = b.dataset.act;
+  const act = b.dataset.act, id = b.dataset.id;
   if (act === 'close-bg' && e.target !== b) return;
-  if (act === 'tab') { S.tab = b.dataset.tab; render(); }
-  else if (act === 'discreet') { S.discreet = !S.discreet; try { localStorage.setItem('fin_discreet', S.discreet ? '1' : '0'); } catch (x) {} render(); }
-  else if (act === 'filter') { S.filter = b.dataset.f; render(); }
-  else if (act === 'new-account') { S.sheet = { kind: 'account' }; render(); }
-  else if (act === 'add') { S.sheet = { kind: 'add' }; render(); }
-  else if (act === 'bank') { openBank(); }
-  else if (act === 'pick-bank') { startBank(b.dataset.name, Number(b.dataset.max) || undefined); }
-  else if (act === 'sync') { syncNow(); }
-  else if (act === 'logout') { await sb.auth.signOut(); S.accounts = []; S.tx = []; S.conns = []; render(); }
-  else if (act === 'import' || act === 'open-account') { S.sheet = { kind: 'import', acc: b.dataset.id || (S.accounts[0] && S.accounts[0].id) }; render(); }
-  else if (act === 'close' || act === 'close-bg') { const reload = S.sheet && S.sheet.result; S.sheet = null; render(); if (reload) load(); }
+  try {
+    switch (act) {
+      case 'tab': S.tab = b.dataset.tab; S.sheet = null; render.resetScroll = true; render(); break;
+      case 'discreet': S.discreet = !S.discreet; try { localStorage.setItem('fin_discreet', S.discreet ? '1' : '0'); } catch (x) {} render(); break;
+      case 'filter': S.filter = b.dataset.f; render(); break;
+      case 'clear-cat': S.catFilter = null; render(); break;
+      case 'open-uncat': S.tab = 'tx'; S.filter = 'open'; S.catFilter = null; render.resetScroll = true; render(); break;
+      case 'cat-tx': S.tab = 'tx'; S.filter = 'out'; S.catFilter = id || null; if (!id) S.filter = 'open'; render.resetScroll = true; render(); break;
+      case 'add': openSheet({ kind: 'add' }); break;
+      case 'new-account': openSheet({ kind: 'account' }); break;
+      case 'bank': openBank(); break;
+      case 'pick-bank': startBank(b.dataset.name, Number(b.dataset.max) || undefined); break;
+      case 'sync': syncNow(); break;
+      case 'import': case 'open-account': openSheet({ kind: 'import', acc: id || (S.accounts.find(a => a.source !== 'psd2') || S.accounts[0] || {}).id }); break;
+      case 'logout': await sb.auth.signOut(); Object.assign(S, { accounts: [], tx: [], conns: [], contracts: [], budgets: [], sheet: null }); render(); break;
+      case 'close': case 'close-bg': { const reload = S.sheet && S.sheet.result; S.sheet = null; render(); if (reload) load(); break; }
+      case 'tx': openSheet({ kind: 'tx', id }); break;
+      case 'set-cat': {
+        const t = S.tx.find(x => x.id === S.sheet.id); const cat = b.dataset.cat;
+        const remember = document.getElementById('remember') ? document.getElementById('remember').checked : false;
+        t.category_id = cat; t.category_source = 'manual'; render();
+        const n = await rpc('fin_learn_rule', { p_tx: t.id, p_category: cat, p_all: remember });
+        if (remember && n > 1) { for (const x of S.tx) if (x.id !== t.id && (x.counterparty || '').trim().toLowerCase() === (t.counterparty || '').trim().toLowerCase() && Math.sign(x.amount_cents) === Math.sign(t.amount_cents) && x.category_source !== 'manual') { x.category_id = cat; x.category_source = 'learned'; } toast(`Gemerkt – ${n} Buchungen sortiert`); }
+        else toast('Kategorie gespeichert');
+        S.sheet = null; render(); break;
+      }
+      case 'save-note': { const v = document.getElementById('note').value.trim() || null; const { error } = await sb.from('fin_transactions').update({ note: v }).eq('id', id); if (error) throw error; S.tx.find(x => x.id === id).note = v; toast('Notiz gespeichert'); S.sheet = null; render(); break; }
+      case 'split': openSheet({ kind: 'tx', id, split: true, c1: null, c2: S.tx.find(x => x.id === id).category_id }); break;
+      case 'split-c1': S.sheet.part = document.querySelector('input[name=part]').value; S.sheet.c1 = b.dataset.cat; render(); break;
+      case 'split-c2': S.sheet.part = document.querySelector('input[name=part]').value; S.sheet.c2 = b.dataset.cat; render(); break;
+      case 'unsplit': await rpc('fin_unsplit', { p_tx: id }); toast('Aufteilung aufgehoben'); S.sheet = null; await load(); break;
+      case 'del-tx': if (confirmDel()) { const { error } = await sb.from('fin_transactions').delete().eq('id', id); if (error) throw error; toast('Gelöscht'); S.sheet = null; await load(); } break;
+      case 'new-tx': openSheet({ kind: 'new-tx', dir: 'out' }); break;
+      case 'dir': keepForm('#nt-form', ['amt', 'cp', 'day']); S.sheet.dir = b.dataset.d; render(); break;
+      case 'nt-cat': keepForm('#nt-form', ['amt', 'cp', 'day']); S.sheet.cat = b.dataset.cat; render(); break;
+      case 'contract': openSheet({ kind: 'contract', id }); break;
+      case 'new-contract': openSheet({ kind: 'new-contract' }); break;
+      case 'c-accept': { const { error } = await sb.from('fin_contracts').update({ status: 'active' }).eq('id', id); if (error) throw error; S.contracts.find(c => c.id === id).status = 'active'; toast('Übernommen'); render(); break; }
+      case 'c-dismiss': { const { error } = await sb.from('fin_contracts').update({ status: 'dismissed' }).eq('id', id); if (error) throw error; await sb.from('fin_transactions').update({ contract_id: null }).eq('contract_id', id); S.contracts.find(c => c.id === id).status = 'dismissed'; S.sheet = null; toast('Entfernt – wird nicht mehr vorgeschlagen'); render(); break; }
+      case 'c-jarvis': {
+        const c = S.contracts.find(x => x.id === id); const cb = cancelBy(c); if (!cb) { toast('Erst Kündigungsfrist eintragen'); break; }
+        if (c.jarvis_task_id) { toast('Steht schon im Cockpit'); break; }
+        const { data, error } = await sb.from('jarvis_tasks').insert({ title: `Kündigen oder behalten: ${c.provider} (${eurPlain(Math.abs(c.amount_cents))} ${INTERVAL[c.interval]})`, due_date: cb, source: 'jarvis' }).select('id').single();
+        if (error) throw error;
+        await sb.from('fin_contracts').update({ jarvis_task_id: data.id }).eq('id', id); c.jarvis_task_id = data.id; toast('Frist steht im Jarvis-Cockpit'); render(); break;
+      }
+      case 'c-cancel': { const c = S.contracts.find(x => x.id === id); openSheet({ kind: 'cancel', id, letter: letterFor(c) }); break; }
+      case 'c-sent': {
+        const c = S.contracts.find(x => x.id === id); const letter = document.getElementById('letter').value;
+        await sb.from('fin_cancellations').insert({ contract_id: id, letter_text: letter, channel: 'email', sent_at: new Date().toISOString(), status: 'sent' });
+        await sb.from('fin_contracts').update({ status: 'cancel_sent' }).eq('id', id); c.status = 'cancel_sent';
+        setTimeout(() => { S.sheet = null; toast('Als verschickt markiert – bestätige, sobald die Antwort da ist'); }, 400); break;
+      }
+      case 'c-done': await sb.from('fin_contracts').update({ status: 'cancelled' }).eq('id', id); S.contracts.find(c => c.id === id).status = 'cancelled'; S.sheet = null; toast('Gekündigt'); render(); break;
+      case 'copy-letter': try { await navigator.clipboard.writeText(document.getElementById('letter').value); toast('Kopiert'); } catch (x) { toast('Kopieren nicht möglich – Text markieren und kopieren'); } break;
+      case 'detect': { const n = await rpc('fin_detect_contracts', {}); toast(n ? `${n} neue Verträge erkannt` : 'Keine neuen Verträge'); await load(); break; }
+      case 'new-budget': openSheet({ kind: 'budget' }); break;
+      case 'budget': openSheet({ kind: 'budget', id }); break;
+      case 'b-cat': keepForm('#b-form', ['amt']); S.sheet.cat = b.dataset.cat; render(); break;
+      case 'b-del': await sb.from('fin_budgets').delete().eq('id', id); S.sheet = null; toast('Budget gelöscht'); await load(); break;
+    }
+  } catch (err) { toast('Fehler: ' + (err.message || err)); }
 });
+function keepForm(sel, names) { const f = document.querySelector(sel); if (!f) return; for (const n of names) { const i = f.querySelector(`[name=${n}]`); if (i) S.sheet[n] = i.value; } }
+function confirmDel() { return window.confirm('Diese Buchung wirklich löschen?'); }
 document.addEventListener('input', e => {
   if (e.target.id === 'q') { S.q = e.target.value; render(); }
-  if (e.target.id === 'bq' && S.sheet) { S.sheet.q = e.target.value; render(); const x = $('#bq'); x.focus(); x.setSelectionRange(x.value.length, x.value.length); }
+  if (e.target.id === 'bq' && S.sheet) { S.sheet.q = e.target.value; render(); }
+  if (e.target.id === 'letter' && S.sheet) S.sheet.letter = e.target.value;
 });
+document.addEventListener('change', e => { if (e.target.id === 'remember' && S.sheet) S.sheet.remember = e.target.checked; });
 document.addEventListener('submit', async e => {
   e.preventDefault();
-  const f = e.target, d = new FormData(f);
-  if (f.id === 'login') {
-    const { error } = await sb.auth.signInWithPassword({ email: d.get('email'), password: d.get('pw') });
-    S.err = error ? 'Anmeldung fehlgeschlagen: ' + error.message : null; render();
-  } else if (f.id === 'eb-form') {
-    const file = d.get('pem');
-    if (!file || !file.size || file.size > 20000) { S.sheet.err = 'Bitte die .pem-Datei von Enable Banking wählen.'; render(); return; }
-    S.sheet.busy = true; S.sheet.err = null; render();
-    try { await fn({ action: 'setup', app_id: String(d.get('app')).trim(), pem: await file.text() }); toast('Enable Banking eingerichtet'); openBank(); }
-    catch (err) { S.sheet.busy = false; S.sheet.err = err.message; render(); }
-  } else if (f.id === 'acc-form') {
-    S.sheet.v = { name: d.get('name'), bank: d.get('bank'), bal: d.get('bal') };
-    const bal = parseEuro(d.get('bal'));
-    if (bal === null && d.get('bal').trim() !== '0') { S.sheet.err = 'Kontostand als Zahl eingeben, z. B. 1.204,55'; render(); return; }
-    const type = d.get('type');
-    const { error } = await sb.from('fin_accounts').insert({ name: d.get('name').trim(), bank_name: d.get('bank').trim() || null, type, balance_cents: bal || 0, source: type === 'bargeld' ? 'manual' : 'csv' });
-    if (error) { S.sheet.err = error.message; render(); return; }
-    S.sheet = null; toast('Konto angelegt'); load();
-  } else if (f.id === 'imp-form') {
-    const file = d.get('file'); const acc = d.get('acc');
-    const balRaw = (d.get('bal') || '').trim(); const bal = balRaw ? parseEuro(balRaw) : null;
-    if (balRaw && bal === null) { S.sheet.err = 'Kontostand als Zahl eingeben, z. B. 1.204,55'; render(); return; }
-    S.sheet.busy = true; S.sheet.err = null; S.sheet.acc = acc; render();
-    try { S.sheet.result = await importCsv(file, acc, bal); }
-    catch (err) { S.sheet.err = err.message || String(err); }
-    S.sheet.busy = false; render();
-  }
+  const f = e.target, d = new FormData(f), sh = S.sheet;
+  try {
+    if (f.id === 'login') {
+      const { error } = await sb.auth.signInWithPassword({ email: d.get('email'), password: d.get('pw') });
+      S.err = error ? 'Anmeldung fehlgeschlagen: ' + error.message : null; render();
+    } else if (f.id === 'eb-form') {
+      const file = d.get('pem');
+      if (!file || !file.size || file.size > 20000) { sh.err = 'Bitte die .pem-Datei wählen.'; render(); return; }
+      sh.busy = true; sh.err = null; render();
+      try { await fn({ action: 'setup', app_id: String(d.get('app')).trim(), pem: await file.text() }); toast('Enable Banking eingerichtet'); openBank(); }
+      catch (err) { sh.busy = false; sh.err = err.message; render(); }
+    } else if (f.id === 'acc-form') {
+      sh.v = { name: d.get('name'), bal: d.get('bal') };
+      const bal = parseEuro(d.get('bal'));
+      if (bal === null && d.get('bal').trim() !== '0') { sh.err = 'Stand als Zahl eingeben, z. B. 40,00'; render(); return; }
+      const { error } = await sb.from('fin_accounts').insert({ name: d.get('name').trim(), type: d.get('type'), balance_cents: bal || 0, source: 'manual' });
+      if (error) throw error; S.sheet = null; toast('Konto angelegt'); load();
+    } else if (f.id === 'imp-form') {
+      const file = d.get('file'), acc = d.get('acc'), balRaw = (d.get('bal') || '').trim(), bal = balRaw ? parseEuro(balRaw) : null;
+      if (balRaw && bal === null) { sh.err = 'Kontostand als Zahl eingeben'; render(); return; }
+      sh.busy = true; sh.err = null; sh.acc = acc; render();
+      try { sh.result = await importCsv(file, acc, bal); } catch (err) { sh.err = err.message || String(err); }
+      sh.busy = false; render();
+    } else if (f.id === 'split-form') {
+      const part = parseEuro(d.get('part'));
+      if (!part || !sh.c1 || !sh.c2) { sh.part = d.get('part'); sh.err = 'Teilbetrag und beide Kategorien wählen.'; render(); return; }
+      await rpc('fin_split', { p_tx: sh.id, p_part_cents: Math.abs(part), p_part_category: sh.c1, p_rest_category: sh.c2 });
+      S.sheet = null; toast('Aufgeteilt'); await load();
+    } else if (f.id === 'nt-form') {
+      const amt = parseEuro(d.get('amt'));
+      if (!amt) { keepForm('#nt-form', ['amt', 'cp', 'day']); sh.err = 'Betrag eingeben'; render(); return; }
+      const cents = Math.abs(amt) * (sh.dir === 'in' ? 1 : -1);
+      const acc = d.get('acc');
+      const row = { account_id: acc, booked_on: d.get('day'), amount_cents: cents, counterparty: (d.get('cp') || '').trim() || null, category_id: sh.cat || null, category_source: sh.cat ? 'manual' : null, dedupe_hash: 'm:' + crypto.randomUUID() };
+      const { error } = await sb.from('fin_transactions').insert(row); if (error) throw error;
+      const a = S.accounts.find(x => x.id === acc);
+      await sb.from('fin_accounts').update({ balance_cents: Number(a.balance_cents) + cents }).eq('id', acc);
+      S.sheet = null; toast('Gespeichert'); await load();
+    } else if (f.id === 'c-form') {
+      const amt = parseEuro(d.get('amt'));
+      if (!amt) { sh.err = 'Betrag eingeben'; render(); return; }
+      const income = d.get('income') === '1';
+      const row = {
+        provider: d.get('provider').trim(), amount_cents: Math.abs(amt) * (income ? 1 : -1), interval: d.get('interval'), is_income: income,
+        next_due_on: d.get('next') || null, notice_period_days: d.get('notice') ? parseInt(d.get('notice'), 10) : null, min_term_end_on: d.get('term') || null,
+        customer_number: (d.get('cust') || '').trim() || null, cancel_email: (d.get('mail') || '').trim() || null
+      };
+      if (sh.kind === 'new-contract') { row.status = 'active'; row.counterparty_pattern = null; const { error } = await sb.from('fin_contracts').insert(row); if (error) throw error; }
+      else { const c = S.contracts.find(x => x.id === sh.id); if (c.status === 'suggested') row.status = 'active'; const { error } = await sb.from('fin_contracts').update(row).eq('id', sh.id); if (error) throw error; }
+      S.sheet = null; toast('Gespeichert'); await load();
+    } else if (f.id === 'b-form') {
+      const amt = parseEuro(d.get('amt')); const cat = sh.cat || (sh.id && S.budgets.find(x => x.id === sh.id).category_id);
+      if (!amt || !cat) { sh.amt = d.get('amt'); sh.err = 'Betrag und Kategorie wählen.'; render(); return; }
+      const row = { category_id: cat, amount_cents: Math.abs(amt), period: 'monthly' };
+      const { error } = sh.id ? await sb.from('fin_budgets').update(row).eq('id', sh.id) : await sb.from('fin_budgets').upsert(row, { onConflict: 'user_id,category_id,period' });
+      if (error) throw error; S.sheet = null; toast('Budget gespeichert'); await load();
+    }
+  } catch (err) { if (S.sheet) { S.sheet.err = err.message || String(err); render(); } else toast('Fehler: ' + (err.message || err)); }
 });
+
+async function importCsv(file, accountId, newBalance) {
+  const text = Parser.decode(await file.arrayBuffer());
+  const res = Parser.parse(text);
+  if (!res.rows.length) throw new Error('In der Datei sind keine Buchungen.');
+  await Parser.withHashes(accountId, res.rows);
+  const rows = res.rows.map(t => { const cat = Parser.categorize(t, S.rules); return { ...t, account_id: accountId, category_id: cat, category_source: cat ? 'rule' : null }; });
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i += 500) {
+    const { data, error } = await sb.from('fin_transactions').upsert(rows.slice(i, i + 500), { onConflict: 'account_id,dedupe_hash', ignoreDuplicates: true }).select('id');
+    if (error) throw error; inserted += (data || []).length;
+  }
+  const upd = { last_sync_at: new Date().toISOString(), source: 'csv' };
+  if (newBalance !== null) upd.balance_cents = newBalance;
+  await sb.from('fin_accounts').update(upd).eq('id', accountId);
+  return { total: rows.length, inserted, skipped: rows.length - inserted, bad: res.errors.length };
+}
 
 (() => {
   const p = new URLSearchParams(location.search);
@@ -590,10 +925,10 @@ document.addEventListener('submit', async e => {
     : 'Verbindung fehlgeschlagen: ' + (p.get('msg') || 'unbekannt')), 600);
   history.replaceState(null, '', location.pathname);
 })();
-
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.user) load().then(maybeAutoSync); });
 sb.auth.onAuthStateChange((_ev, session) => {
   const was = S.user; S.user = session ? session.user : null;
-  if (S.user && !was) load(); else render();
+  if (S.user && !was) load().then(maybeAutoSync); else render();
 });
 </script>
 </body>
