@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#0C0B0A">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Finanzen">
+<title>Finanzen</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#0C0B0A;--surface:#151413;--surface-2:#1C1B19;--border:#2A2724;--border-input:#6E6962;
+  --text:#EDE9E3;--muted:#8E8880;--accent:#C8B07A;--accent-pressed:#B59E6A;--on-accent:#0C0B0A;
+  --income:#8FA98A;--danger:#C2715F;
+  --r-sm:8px;--r-md:12px;--r-lg:20px;
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box}
+html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;overscroll-behavior:none;background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,sans-serif;font-variant-numeric:tabular-nums;overscroll-behavior:none}
+button,a,.tap{touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+button{font:inherit;color:inherit;cursor:pointer}
+input,select,textarea{font:inherit;font-size:16px;color:var(--text)}
+.app{height:100dvh;display:flex;flex-direction:column}
+.scroll{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;padding:calc(20px + var(--sat)) 20px 24px}
+.stack{display:flex;flex-direction:column}
+.over{font-size:12px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+h1{margin:0;font-weight:400;letter-spacing:-.01em;font-size:30px;line-height:36px}
+.amt{font-weight:300;letter-spacing:-.01em;white-space:nowrap}
+.amt .c{font-size:.62em;color:var(--muted)}
+.hero{font-size:48px;line-height:52px;font-weight:300;letter-spacing:-.02em}
+.hero .c{font-size:28px;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:58px;border-bottom:1px solid var(--border)}
+.row:last-child{border-bottom:0}
+.btn{height:44px;padding:0 16px;border-radius:var(--r-md);border:0;background:var(--border);font-size:14px;font-weight:500;transition:transform 120ms var(--ease),background 120ms}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--accent);color:var(--on-accent);font-weight:600}
+.btn.primary:active{background:var(--accent-pressed)}
+.btn.block{width:100%}
+.btn:disabled{opacity:.45}
+.icon-btn{width:44px;height:44px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;padding:0;transition:transform 120ms var(--ease)}
+.icon-btn:active{transform:scale(.94)}
+.icon-btn.gold{background:var(--accent);color:var(--on-accent);border:0}
+.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.field input,.field select{height:46px;padding:0 14px;border-radius:var(--r-md);border:1px solid var(--border-input);background:var(--surface);outline:none}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.chips{display:flex;gap:8px;overflow-x:auto}
+.chip{height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:14px;white-space:nowrap}
+.chip.on{border-color:var(--accent);background:rgba(200,176,122,.12);color:var(--accent);font-weight:500}
+.tx{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;background:var(--surface);border:1px solid var(--border)}
+.av{width:36px;height:36px;flex:0 0 36px;border-radius:999px;background:var(--bg);border:1px solid var(--border);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px}
+.av.open{background:transparent;border:1px dashed var(--accent)}
+.tx .t{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.tx .t b{font-weight:500;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tx .t span{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pos{color:var(--income)}
+.nav{flex:0 0 auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:10px 8px calc(10px + var(--sab));border-top:1px solid var(--border);background:var(--surface)}
+.nav button{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:44px;border:0;background:none;color:var(--muted);font-size:12px;font-weight:500}
+.nav button[aria-current="page"]{color:var(--accent)}
+.empty{border:1px dashed var(--border);border-radius:var(--r-lg);padding:28px 20px;text-align:center;color:var(--muted);font-size:14px;line-height:20px}
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;z-index:20}
+.sheet{width:100%;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain;background:var(--surface);border-top:1px solid var(--border);border-radius:28px 28px 0 0;padding:20px 20px calc(24px + var(--sab));display:flex;flex-direction:column;gap:16px}
+.toast{position:fixed;left:20px;right:20px;bottom:calc(96px + var(--sab));padding:14px 16px;border-radius:var(--r-md);background:var(--surface-2);border:1px solid var(--border);font-size:14px;z-index:30}
+.discreet .amt,.discreet .hero{filter:blur(8px)}
+.bar{height:8px;border-radius:999px;background:var(--bg);border:1px solid var(--border);padding:1px}
+.bar i{display:block;height:4px;border-radius:999px;background:var(--accent)}
+.err{color:var(--danger);font-size:13px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (hover:hover) and (pointer:fine){.btn:hover{filter:brightness(1.08)}.chip:hover{color:var(--text)}}
+</style>
+</head>
+<body>
+<div id="app" class="app"></div>
+
+<script>
+/* ===== PARSER (rein, ohne DOM – testbar) ===== */
+const Parser = (() => {
+  function decode(buf) {
+    const utf = new TextDecoder('utf-8').decode(buf);
+    if (!utf.includes('�')) return utf.replace(/^﻿/, '');
+    return new TextDecoder('windows-1252').decode(buf);
+  }
+  function splitCsv(text) {
+    const first = text.split(/\r?\n/).find(l => l.trim()) || '';
+    const sep = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ';' : ',';
+    const rows = []; let row = [], cur = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === sep) { row.push(cur); cur = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cur); cur = '';
+        if (row.some(c => c.trim() !== '')) rows.push(row);
+        row = [];
+      } else cur += ch;
+    }
+    row.push(cur); if (row.some(c => c.trim() !== '')) rows.push(row);
+    return rows;
+  }
+  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+  const COLS = {
+    date: ['buchungstag', 'buchungsdatum', 'datum', 'date', 'bookingdate', 'wertstellung', 'valutadatum', 'valuedate'],
+    amount: ['betrag', 'betrageur', 'amount', 'umsatz', 'betraginEUR'.toLowerCase()],
+    counterparty: ['beguenstigterzahlungspflichtiger', 'begunstigterzahlungspflichtiger', 'zahlungsempfaengerin', 'zahlungsempfanger', 'empfaenger', 'auftraggeberempfaenger', 'auftraggeberbeguenstigter', 'name', 'counterparty', 'payee', 'beschreibung'],
+    purpose: ['verwendungszweck', 'purpose', 'reference', 'buchungstext', 'description', 'vorgang'],
+    iban: ['kontonummeriban', 'iban', 'kontonummer'],
+    currency: ['waehrung', 'wahrung', 'currency'],
+    info: ['info', 'status']
+  };
+  function findHeader(rows) {
+    for (let i = 0; i < Math.min(rows.length, 30); i++) {
+      const h = rows[i].map(norm);
+      const has = k => COLS[k].some(c => h.includes(c));
+      if (has('date') && has('amount')) return i;
+    }
+    return -1;
+  }
+  function col(h, key, exclude = []) {
+    for (const c of COLS[key]) { const i = h.indexOf(c); if (i >= 0 && !exclude.includes(i)) return i; }
+    return -1;
+  }
+  function parseDate(s) {
+    s = (s || '').trim();
+    let m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})$/);
+    if (m) { let y = +m[3]; if (y < 100) y += 2000; return `${y}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`; }
+    m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    return null;
+  }
+  function parseAmount(s) {
+    s = (s || '').replace(/\s|€|EUR/gi, '').replace(/^\+/, '');
+    if (!s) return null;
+    let neg = false;
+    if (/^-/.test(s) || /-$/.test(s)) { neg = true; s = s.replace(/-/g, ''); }
+    const lc = s.lastIndexOf(','), ld = s.lastIndexOf('.');
+    if (lc > ld) s = s.replace(/\./g, '').replace(',', '.');
+    else s = s.replace(/,/g, '');
+    const v = Math.round(parseFloat(s) * 100);
+    if (!isFinite(v)) return null;
+    return neg ? -v : v;
+  }
+  function maskIban(s) {
+    s = (s || '').replace(/\s/g, '');
+    if (s.length < 8) return s || null;
+    return s.slice(0, 4) + ' **** ' + s.slice(-4);
+  }
+  function parse(text) {
+    const rows = splitCsv(text);
+    const hi = findHeader(rows);
+    if (hi < 0) throw new Error('Keine Spalten für Datum und Betrag gefunden. Ist das ein Umsatz-Export als CSV?');
+    const h = rows[hi].map(norm);
+    const iDate = col(h, 'date'), iAmt = col(h, 'amount');
+    const iCp = col(h, 'counterparty'), iPur = col(h, 'purpose', [iCp]);
+    const iIban = h.indexOf('kontonummeriban') >= 0 ? h.indexOf('kontonummeriban') : (h.indexOf('iban') >= 0 && h.indexOf('iban') !== 0 ? h.indexOf('iban') : -1);
+    const iCur = col(h, 'currency'), iInfo = col(h, 'info');
+    const iText = h.indexOf('buchungstext');
+    const out = [], errors = [];
+    for (let r = hi + 1; r < rows.length; r++) {
+      const x = rows[r];
+      const date = parseDate(x[iDate]); const amount = parseAmount(x[iAmt]);
+      if (!date || amount === null) { errors.push(r + 1); continue; }
+      if (amount === 0) continue;
+      const info = iInfo >= 0 ? (x[iInfo] || '').toLowerCase() : '';
+      let purpose = iPur >= 0 ? (x[iPur] || '').trim() : '';
+      if (iText >= 0 && iText !== iPur && x[iText]) purpose = purpose ? purpose : x[iText].trim();
+      out.push({
+        booked_on: date,
+        amount_cents: amount,
+        currency: iCur >= 0 && x[iCur] ? x[iCur].trim().toUpperCase() : 'EUR',
+        counterparty: iCp >= 0 ? (x[iCp] || '').trim() || null : null,
+        purpose: purpose || null,
+        counterparty_iban_masked: iIban >= 0 ? maskIban(x[iIban]) : null,
+        status: info.includes('vorgemerkt') || info.includes('pending') ? 'pending' : 'booked'
+      });
+    }
+    return { rows: out, errors, columns: rows[hi] };
+  }
+  async function sha256(s) {
+    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+    return [...new Uint8Array(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+  async function withHashes(accountId, rows) {
+    const seen = {};
+    for (const t of rows) {
+      const base = [accountId, t.booked_on, t.amount_cents, (t.counterparty || '').toLowerCase(), (t.purpose || '').toLowerCase().replace(/\s+/g, ' ')].join('|');
+      seen[base] = (seen[base] || 0) + 1;
+      t.dedupe_hash = await sha256(base + '|' + seen[base]);
+    }
+    return rows;
+  }
+  function categorize(t, rules) {
+    const sign = t.amount_cents < 0 ? -1 : 1;
+    for (const r of rules) {
+      if (r.amount_sign && r.amount_sign !== sign) continue;
+      const hay = (r.field === 'purpose' ? t.purpose : r.field === 'iban' ? t.counterparty_iban_masked : t.counterparty) || '';
+      if (hay.toLowerCase().includes(r.pattern.toLowerCase())) return r.category_id;
+    }
+    return null;
+  }
+  return { decode, splitCsv, parse, parseDate, parseAmount, withHashes, categorize };
+})();
+/* ===== /PARSER ===== */
+</script>
+
+<script>
+const SB_URL = 'https://rxwomtelcddkhyrilhsq.supabase.co';
+const SB_KEY = 'sb_publishable_7ZfExgJbLXFw7-BJO5zSnA_rkpF5UtY';
+const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+
+const S = { user: null, tab: 'home', accounts: [], tx: [], cats: {}, catList: [], rules: [], filter: 'all', q: '', discreet: false, sheet: null, toast: null, loading: true, err: null };
+try { S.discreet = localStorage.getItem('fin_discreet') === '1'; } catch (e) {}
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function eur(c, sign = false) {
+  const neg = c < 0, a = Math.abs(c);
+  const main = Math.floor(a / 100).toLocaleString('de-DE'), cents = String(a % 100).padStart(2, '0');
+  return `<span class="amt">${neg ? '−' : (sign ? '+ ' : '')}${main}<span class="c">,${cents} €</span></span>`;
+}
+const fmtDay = d => {
+  const today = new Date().toISOString().slice(0, 10);
+  const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  if (d === today) return 'Heute';
+  if (d === y) return 'Gestern';
+  return new Date(d + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'short' });
+};
+const ICON = {
+  home: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+  list: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
+  repeat: '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>',
+  pie: '<path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeoff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.8M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a10 10 0 0 0 4.2-.9"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  upload: '<path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/>'
+};
+const svg = (k, s = 20, w = 1.5) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
+
+function toast(msg) { S.toast = msg; render(); clearTimeout(toast.t); toast.t = setTimeout(() => { S.toast = null; render(); }, 3500); }
+
+/* ===== Daten ===== */
+async function load() {
+  S.loading = true; render();
+  const [a, c, r, t] = await Promise.all([
+    sb.from('fin_accounts').select('*').eq('archived', false).order('created_at'),
+    sb.from('fin_categories').select('*').order('name'),
+    sb.from('fin_category_rules').select('*').order('priority'),
+    sb.from('fin_transactions').select('id,account_id,booked_on,amount_cents,counterparty,purpose,category_id,status,is_split_parent,note').order('booked_on', { ascending: false }).order('created_at', { ascending: false }).limit(1000)
+  ]);
+  const e = a.error || c.error || r.error || t.error;
+  S.err = e ? e.message : null;
+  S.accounts = a.data || []; S.catList = c.data || []; S.rules = r.data || []; S.tx = t.data || [];
+  S.cats = Object.fromEntries(S.catList.map(x => [x.id, x]));
+  S.loading = false; render();
+}
+
+async function importCsv(file, accountId, newBalance) {
+  const text = Parser.decode(await file.arrayBuffer());
+  const res = Parser.parse(text);
+  if (!res.rows.length) throw new Error('In der Datei sind keine Buchungen.');
+  await Parser.withHashes(accountId, res.rows);
+  const rows = res.rows.map(t => {
+    const cat = Parser.categorize(t, S.rules);
+    return { ...t, account_id: accountId, category_id: cat, category_source: cat ? 'rule' : null };
+  });
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i += 500) {
+    const { data, error } = await sb.from('fin_transactions').upsert(rows.slice(i, i + 500), { onConflict: 'account_id,dedupe_hash', ignoreDuplicates: true }).select('id');
+    if (error) throw error;
+    inserted += (data || []).length;
+  }
+  const upd = { last_sync_at: new Date().toISOString(), source: 'csv' };
+  if (newBalance !== null) upd.balance_cents = newBalance;
+  await sb.from('fin_accounts').update(upd).eq('id', accountId);
+  return { total: rows.length, inserted, skipped: rows.length - inserted, bad: res.errors.length };
+}
+
+/* ===== Ansichten ===== */
+function vLogin() {
+  return `<div class="scroll stack" style="justify-content:center;gap:24px">
+    <div class="stack" style="gap:6px"><span class="over">Finanzen</span><h1>Anmelden</h1><span class="muted" style="font-size:14px">Mit demselben Konto wie Jarvis.</span></div>
+    <form id="login" class="stack" style="gap:14px">
+      <label class="field">E-Mail<input name="email" type="email" autocomplete="email" autocapitalize="none" autocorrect="off" required></label>
+      <label class="field">Passwort<input name="pw" type="password" autocomplete="current-password" required></label>
+      ${S.err ? `<p class="err" role="alert">${esc(S.err)}</p>` : ''}
+      <button class="btn primary block" type="submit">Anmelden</button>
+    </form></div>`;
+}
+
+function total() { return S.accounts.filter(a => a.include_in_total).reduce((s, a) => s + Number(a.balance_cents), 0); }
+
+function vHome() {
+  const t = total();
+  const monthStart = new Date().toISOString().slice(0, 8) + '01';
+  const monthSum = S.tx.filter(x => x.booked_on >= monthStart && !x.is_split_parent).reduce((s, x) => s + Number(x.amount_cents), 0);
+  const main = Math.floor(Math.abs(t) / 100).toLocaleString('de-DE'), cents = String(Math.abs(t) % 100).padStart(2, '0');
+  const accs = S.accounts.map(a => `<button class="row tap" data-act="open-account" data-id="${a.id}" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;padding:0;text-align:left">
+      <span class="stack" style="gap:2px"><span style="font-size:16px">${esc(a.name)}</span><span class="muted" style="font-size:12px">${esc(a.bank_name || ({ bargeld: 'manuell erfasst' }[a.type] || a.type))}${a.last_sync_at ? ' · Import ' + new Date(a.last_sync_at).toLocaleDateString('de-DE') : ''}</span></span>
+      ${eur(Number(a.balance_cents))}</button>`).join('');
+  return `<div class="scroll stack" style="gap:20px">
+    <header style="display:flex;justify-content:space-between;align-items:center">
+      <div class="stack" style="gap:4px"><span class="over">Gesamtsaldo</span><span class="muted" style="font-size:14px">${new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}</span></div>
+      <button class="icon-btn" data-act="discreet" aria-label="${S.discreet ? 'Beträge zeigen' : 'Beträge verbergen'}">${svg(S.discreet ? 'eyeoff' : 'eye', 18)}</button>
+    </header>
+    <section class="stack" style="gap:8px">
+      <div class="hero">${t < 0 ? '−' : ''}${main}<span class="c">,${cents} €</span></div>
+      ${S.tx.length ? `<span class="muted" style="font-size:13px">Diesen Monat: <span class="${monthSum >= 0 ? 'pos' : ''}">${eur(monthSum, true)}</span></span>` : ''}
+    </section>
+    <section class="stack">
+      <span class="over" style="margin-bottom:4px">Konten</span>
+      ${accs || '<div class="empty">Noch kein Konto. Lege eins an und lade eine CSV aus deinem Online-Banking hoch.</div>'}
+      <button class="row tap" data-act="new-account" style="width:100%;background:none;border:0;padding:0;text-align:left;color:var(--text)">
+        <span class="stack" style="gap:2px"><span style="font-size:16px">Konto hinzufügen</span><span class="muted" style="font-size:12px">Sparkasse, Trade Republic, Bargeld</span></span>
+        <span style="color:var(--accent)">${svg('plus', 20)}</span></button>
+    </section>
+    ${S.accounts.length ? `<button class="btn primary block" data-act="import">${svg('upload', 16, 2)} &nbsp;CSV importieren</button>` : ''}
+  </div>`;
+}
+
+function filteredTx() {
+  const q = S.q.trim().toLowerCase();
+  return S.tx.filter(x => {
+    if (x.is_split_parent) return false;
+    if (S.filter === 'out' && x.amount_cents > 0) return false;
+    if (S.filter === 'in' && x.amount_cents < 0) return false;
+    if (S.filter === 'open' && x.category_id) return false;
+    if (!q) return true;
+    const amt = (Math.abs(x.amount_cents) / 100).toFixed(2).replace('.', ',');
+    return (x.counterparty || '').toLowerCase().includes(q) || (x.purpose || '').toLowerCase().includes(q) || amt.includes(q.replace('-', ''));
+  });
+}
+
+function vTx() {
+  const list = filteredTx();
+  const open = S.tx.filter(x => !x.category_id && !x.is_split_parent).length;
+  const acc = Object.fromEntries(S.accounts.map(a => [a.id, a.name]));
+  const groups = [];
+  for (const x of list.slice(0, 300)) {
+    const g = groups[groups.length - 1];
+    if (g && g.d === x.booked_on) g.items.push(x); else groups.push({ d: x.booked_on, items: [x] });
+  }
+  const body = groups.map(g => {
+    const sum = g.items.reduce((s, x) => s + Number(x.amount_cents), 0);
+    return `<div style="display:flex;justify-content:space-between;padding-top:8px"><span class="over">${esc(fmtDay(g.d))}</span><span class="muted" style="font-size:12px">${eur(sum, true)}</span></div>` +
+      g.items.map(x => {
+        const name = x.counterparty || x.purpose || 'Ohne Empfänger';
+        const cat = S.cats[x.category_id];
+        const sub = cat ? esc(cat.name) : '<span style="color:var(--accent)">Kategorie wählen</span>';
+        return `<div class="tx"><span class="av${cat ? '' : ' open'}" aria-hidden="true">${esc(name.trim().charAt(0).toUpperCase() || '?')}</span>
+          <span class="t"><b>${esc(name)}</b><span>${sub} · ${esc(acc[x.account_id] || '')}${x.status === 'pending' ? ' · vorgemerkt' : ''}</span></span>
+          <span class="${x.amount_cents > 0 ? 'pos' : ''}" style="font-size:15px">${eur(Number(x.amount_cents), true)}</span></div>`;
+      }).join('');
+  }).join('');
+  const chip = (k, l) => `<button class="chip${S.filter === k ? ' on' : ''}" data-act="filter" data-f="${k}" aria-pressed="${S.filter === k}">${l}</button>`;
+  return `<div class="scroll stack" style="gap:16px">
+    <header style="display:flex;justify-content:space-between;align-items:flex-end">
+      <div class="stack" style="gap:4px"><h1>Umsätze</h1><span class="muted" style="font-size:13px">${S.tx.length} Buchungen · alle Konten</span></div>
+      ${S.accounts.length ? `<button class="icon-btn gold" data-act="import" aria-label="CSV importieren">${svg('upload', 18, 2)}</button>` : ''}
+    </header>
+    <label class="field" style="flex-direction:row;align-items:center"><span class="sr">Umsätze durchsuchen</span>
+      <input id="q" type="search" enterkeyhint="search" placeholder="Händler, Zweck oder Betrag" value="${esc(S.q)}" style="flex:1"></label>
+    <div class="chips" role="group" aria-label="Filter">${chip('all', 'Alle')}${chip('out', 'Ausgaben')}${chip('in', 'Eingänge')}${chip('open', 'Offen ' + open)}</div>
+    <section class="stack" style="gap:8px">${body || `<div class="empty">${S.tx.length ? 'Nichts gefunden.' : 'Noch keine Umsätze. Importiere eine CSV aus deinem Online-Banking.'}</div>`}</section>
+    ${list.length > 300 ? '<p class="muted" style="font-size:12px;text-align:center">Die ersten 300 Treffer. Suche eingrenzen für mehr.</p>' : ''}
+  </div>`;
+}
+
+function vSoon(title, text) {
+  return `<div class="scroll stack" style="gap:16px"><h1>${title}</h1><div class="empty">${text}</div></div>`;
+}
+
+function vSheet() {
+  if (!S.sheet) return '';
+  const close = `<button class="icon-btn" data-act="close" aria-label="Schließen">${svg('close', 16)}</button>`;
+  if (S.sheet.kind === 'account') {
+    return `<div class="sheet-bg" data-act="close-bg"><form class="sheet" id="acc-form" role="dialog" aria-label="Konto anlegen">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span class="over" style="color:var(--accent)">Neues Konto</span>${close}</div>
+      <label class="field">Name<input name="name" required placeholder="Girokonto" autocomplete="off" value="${esc((S.sheet.v||{}).name)}"></label>
+      <label class="field">Bank<input name="bank" placeholder="Sparkasse LeerWittmund" autocomplete="off" value="${esc((S.sheet.v||{}).bank)}"></label>
+      <label class="field">Art<select name="type"><option value="giro">Girokonto</option><option value="tagesgeld">Tagesgeld / Verrechnungskonto</option><option value="bargeld">Bargeld</option><option value="depot">Depot</option><option value="krypto">Krypto</option></select></label>
+      <label class="field">Aktueller Kontostand in €<input name="bal" inputmode="decimal" placeholder="0,00" required value="${esc((S.sheet.v||{}).bal)}"></label>
+      ${S.sheet.err ? `<p class="err" role="alert">${esc(S.sheet.err)}</p>` : ''}
+      <button class="btn primary block" type="submit">Konto anlegen</button></form></div>`;
+  }
+  if (S.sheet.kind === 'import') {
+    const r = S.sheet.result;
+    const opts = S.accounts.map(a => `<option value="${a.id}"${a.id === S.sheet.acc ? ' selected' : ''}>${esc(a.name)}</option>`).join('');
+    return `<div class="sheet-bg" data-act="close-bg"><form class="sheet" id="imp-form" role="dialog" aria-label="CSV importieren">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span class="over" style="color:var(--accent)">CSV importieren</span>${close}</div>
+      ${r ? `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:6px;font-size:14px">
+          <b style="font-weight:500">${r.inserted} neue Buchungen</b>
+          <span class="muted">${r.skipped} schon vorhanden${r.bad ? ` · ${r.bad} Zeilen nicht lesbar` : ''}</span></div>
+          <button class="btn primary block" type="button" data-act="close">Fertig</button>` : `
+      <p class="muted" style="margin:0;font-size:14px;line-height:20px">Sparkasse: Umsätze → Export → <b style="color:var(--text);font-weight:500">CSV-CAMT</b>. Doppelte Buchungen werden automatisch übersprungen.</p>
+      <label class="field">Konto<select name="acc">${opts}</select></label>
+      <label class="field">Datei<input name="file" type="file" accept=".csv,text/csv,text/plain" required style="padding:10px 14px;height:auto"></label>
+      <label class="field">Kontostand jetzt laut Bank-App (optional)<input name="bal" inputmode="decimal" placeholder="unverändert lassen"></label>
+      ${S.sheet.err ? `<p class="err" role="alert">${esc(S.sheet.err)}</p>` : ''}
+      <button class="btn primary block" type="submit"${S.sheet.busy ? ' disabled' : ''}>${S.sheet.busy ? 'Importiere …' : 'Importieren'}</button>`}
+      </form></div>`;
+  }
+  return '';
+}
+
+function render() {
+  const el = $('#app');
+  const qFocus = document.activeElement && document.activeElement.id === 'q';
+  const pos = qFocus ? document.activeElement.selectionStart : null;
+  const sc = el.querySelector('.scroll'); const top = sc ? sc.scrollTop : 0;
+  document.body.classList.toggle('discreet', S.discreet);
+  if (!S.user) { el.innerHTML = vLogin(); return; }
+  let view;
+  if (S.loading && !S.accounts.length && !S.tx.length) view = '<div class="scroll"><p class="muted">Lade …</p></div>';
+  else if (S.tab === 'home') view = vHome();
+  else if (S.tab === 'tx') view = vTx();
+  else if (S.tab === 'contracts') view = vSoon('Verträge', 'Kommt in Ausbaustufe 2: Verträge werden aus deinen Umsätzen erkannt, Fristen gehen ins Jarvis-Cockpit.');
+  else view = vSoon('Budget', 'Kommt in Ausbaustufe 2: frei verfügbar bis Gehalt, Prognose und Budgets je Kategorie.');
+  const tab = (k, l, i) => `<button data-act="tab" data-tab="${k}"${S.tab === k ? ' aria-current="page"' : ''}>${svg(i, 22)}${l}</button>`;
+  el.innerHTML = view + (S.err ? `<p class="err" style="padding:0 20px" role="alert">${esc(S.err)}</p>` : '') +
+    `<nav class="nav" aria-label="Hauptnavigation">${tab('home', 'Übersicht', 'home')}${tab('tx', 'Umsätze', 'list')}${tab('contracts', 'Verträge', 'repeat')}${tab('budget', 'Budget', 'pie')}</nav>` +
+    vSheet() + (S.toast ? `<div class="toast" role="status">${esc(S.toast)}</div>` : '');
+  const nsc = el.querySelector('.scroll'); if (nsc) nsc.scrollTop = top;
+  if (qFocus) { const q = $('#q'); q.focus(); q.setSelectionRange(pos, pos); }
+}
+
+const parseEuro = s => { s = (s || '').trim(); if (!s) return null; const v = Parser.parseAmount(s); return v; };
+
+/* ===== Ereignisse ===== */
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'close-bg' && e.target !== b) return;
+  if (act === 'tab') { S.tab = b.dataset.tab; render(); }
+  else if (act === 'discreet') { S.discreet = !S.discreet; try { localStorage.setItem('fin_discreet', S.discreet ? '1' : '0'); } catch (x) {} render(); }
+  else if (act === 'filter') { S.filter = b.dataset.f; render(); }
+  else if (act === 'new-account') { S.sheet = { kind: 'account' }; render(); }
+  else if (act === 'import' || act === 'open-account') { S.sheet = { kind: 'import', acc: b.dataset.id || (S.accounts[0] && S.accounts[0].id) }; render(); }
+  else if (act === 'close' || act === 'close-bg') { const reload = S.sheet && S.sheet.result; S.sheet = null; render(); if (reload) load(); }
+});
+document.addEventListener('input', e => { if (e.target.id === 'q') { S.q = e.target.value; render(); } });
+document.addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target, d = new FormData(f);
+  if (f.id === 'login') {
+    const { error } = await sb.auth.signInWithPassword({ email: d.get('email'), password: d.get('pw') });
+    S.err = error ? 'Anmeldung fehlgeschlagen: ' + error.message : null; render();
+  } else if (f.id === 'acc-form') {
+    S.sheet.v = { name: d.get('name'), bank: d.get('bank'), bal: d.get('bal') };
+    const bal = parseEuro(d.get('bal'));
+    if (bal === null && d.get('bal').trim() !== '0') { S.sheet.err = 'Kontostand als Zahl eingeben, z. B. 1.204,55'; render(); return; }
+    const type = d.get('type');
+    const { error } = await sb.from('fin_accounts').insert({ name: d.get('name').trim(), bank_name: d.get('bank').trim() || null, type, balance_cents: bal || 0, source: type === 'bargeld' ? 'manual' : 'csv' });
+    if (error) { S.sheet.err = error.message; render(); return; }
+    S.sheet = null; toast('Konto angelegt'); load();
+  } else if (f.id === 'imp-form') {
+    const file = d.get('file'); const acc = d.get('acc');
+    const balRaw = (d.get('bal') || '').trim(); const bal = balRaw ? parseEuro(balRaw) : null;
+    if (balRaw && bal === null) { S.sheet.err = 'Kontostand als Zahl eingeben, z. B. 1.204,55'; render(); return; }
+    S.sheet.busy = true; S.sheet.err = null; S.sheet.acc = acc; render();
+    try { S.sheet.result = await importCsv(file, acc, bal); }
+    catch (err) { S.sheet.err = err.message || String(err); }
+    S.sheet.busy = false; render();
+  }
+});
+
+sb.auth.onAuthStateChange((_ev, session) => {
+  const was = S.user; S.user = session ? session.user : null;
+  if (S.user && !was) load(); else render();
+});
+</script>
+</body>
+</html>
