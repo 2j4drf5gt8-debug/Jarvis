@@ -70,6 +70,25 @@ async function sha(s: string) {
 const mask = (iban?: string) => { const s = (iban || "").replace(/\s/g, ""); return s.length >= 8 ? `${s.slice(0, 4)} **** ${s.slice(-4)}` : (s || null); };
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
+// Zahlungsdienstleister, hinter denen der eigentliche Händler steckt
+const PROCESSORS = /landesbank hessen|paypal|adyen|nexi|sumup|klarna|sg-vr payment|stripe|worldline|concardis|payone|wirecard|lastschrift aus kartenzahlung/i;
+function describe(t: any, debit: boolean) {
+  const party = debit ? t.creditor : t.debtor;
+  const ultimate = debit ? t.ultimate_creditor : t.ultimate_debtor;
+  const rem = Array.isArray(t.remittance_information) ? t.remittance_information.join(" ") : (t.remittance_information || "");
+  const extra = [t.note, t.bank_transaction_code?.description, t.merchant_category_code ? `MCC ${t.merchant_category_code}` : ""].filter(Boolean).join(" · ");
+  let purpose = (rem || extra || "").trim() || null;
+  let name = (party?.name || "").trim();
+  const ult = (ultimate?.name || "").trim();
+  if (ult && (!name || PROCESSORS.test(name))) name = ult;
+  if (/paypal/i.test(name) && purpose) {
+    const m = purpose.match(/Ihr Einkauf bei\s+([^,]+?)\s*$/i) || purpose.match(/\.\s*([^,.]{2,40}),\s*Ihr Einkauf/i);
+    if (m && m[1].trim()) name = `${m[1].trim()} (PayPal)`;
+  }
+  if (!name && !rem && extra) name = extra.split(" · ")[0];
+  return { counterparty: name || null, purpose };
+}
+
 function categorize(t: any, rules: any[]) {
   const sign = t.amount_cents < 0 ? -1 : 1;
   for (const r of rules) {
@@ -80,7 +99,7 @@ function categorize(t: any, rules: any[]) {
   return null;
 }
 
-async function syncConnection(c: Record<string, string>, conn: any, psu?: Record<string, string>) {
+async function syncConnection(c: Record<string, string>, conn: any, psu?: Record<string, string>, reparse = false) {
   const run = await sb.from("fin_sync_runs").insert({ user_id: conn.user_id, connection_id: conn.id, source: "psd2" }).select("id").single();
   let inserted = 0, skipped = 0; const errors: string[] = [];
   try {
@@ -101,7 +120,7 @@ async function syncConnection(c: Record<string, string>, conn: any, psu?: Record
 
       // Umsätze
       const { data: last } = await sb.from("fin_transactions").select("booked_on").eq("account_id", acc.id).eq("status", "booked").order("booked_on", { ascending: false }).limit(1);
-      const from = last?.length ? new Date(Date.parse(last[0].booked_on) - 10 * 864e5) : new Date(Date.now() - 730 * 864e5);
+      const from = last?.length && !reparse ? new Date(Date.parse(last[0].booked_on) - 10 * 864e5) : new Date(Date.now() - 730 * 864e5);
       const rows: any[] = []; let key: string | null = null; let page = 0;
       let dateFrom = isoDay(from);
       do {
@@ -111,7 +130,7 @@ async function syncConnection(c: Record<string, string>, conn: any, psu?: Record
         try { d = await eb(c, `/accounts/${acc.provider_account_id}/transactions?${qs}`, {}, psu); }
         catch (e) {
           // Erstabruf: manche Banken geben nur 90 Tage her
-          if (!last?.length && page === 0 && !key && dateFrom !== isoDay(new Date(Date.now() - 89 * 864e5))) { dateFrom = isoDay(new Date(Date.now() - 89 * 864e5)); continue; }
+          if ((!last?.length || reparse) && page === 0 && !key && dateFrom !== isoDay(new Date(Date.now() - 89 * 864e5))) { dateFrom = isoDay(new Date(Date.now() - 89 * 864e5)); continue; }
           errors.push(`${acc.name}: Umsätze – ${(e as Error).message}`); break;
         }
         rows.push(...(d?.transactions || []));
@@ -119,6 +138,7 @@ async function syncConnection(c: Record<string, string>, conn: any, psu?: Record
       } while (key && page < 50);
 
       const seen: Record<string, number> = {};
+      const seenOld: Record<string, number> = {};
       const out: any[] = [];
       for (const t of rows) {
         const st = t.status === "BOOK" ? "booked" : t.status === "PDNG" ? "pending" : null;
@@ -128,20 +148,33 @@ async function syncConnection(c: Record<string, string>, conn: any, psu?: Record
         if (!amount) continue;
         const day = t.booking_date || t.value_date || t.transaction_date;
         if (!day) continue;
-        const counterparty = (debit ? t.creditor?.name : t.debtor?.name) || null;
+        const { counterparty, purpose } = describe(t, debit);
         const iban = debit ? t.creditor_account?.iban : t.debtor_account?.iban;
-        const purpose = (Array.isArray(t.remittance_information) ? t.remittance_information.join(" ") : t.remittance_information) || null;
         const ext = t.entry_reference || t.transaction_id || null;
         const base = [acc.id, day, amount, (counterparty || "").toLowerCase(), (purpose || "").toLowerCase().replace(/\s+/g, " ")].join("|");
         seen[base] = (seen[base] || 0) + 1;
         const row: any = {
           user_id: conn.user_id, account_id: acc.id, booked_on: day, value_on: t.value_date || null,
           amount_cents: amount, currency: t.transaction_amount?.currency || "EUR",
-          counterparty, counterparty_iban_masked: mask(iban), purpose, status: st, external_id: ext,
+          counterparty, counterparty_iban_masked: mask(iban), purpose, status: st, external_id: ext, raw: t,
           dedupe_hash: st === "pending" ? "p:" + (await sha(base + "|" + seen[base])) : (ext ? "x:" + ext : await sha(base + "|" + seen[base])),
         };
         const cat = categorize(row, rules || []);
         row.category_id = cat; row.category_source = cat ? "rule" : null;
+        if (reparse && st === "booked") {
+          // alte Kennung (erste Version: nur creditor/debtor + remittance) finden und Zeile aktualisieren
+          const oldCp = ((debit ? t.creditor?.name : t.debtor?.name) || "").toLowerCase();
+          const oldPur = ((Array.isArray(t.remittance_information) ? t.remittance_information.join(" ") : t.remittance_information) || "").toLowerCase().replace(/\s+/g, " ");
+          const oldBase = [acc.id, day, amount, oldCp, oldPur].join("|");
+          seenOld[oldBase] = (seenOld[oldBase] || 0) + 1;
+          const oldHash = ext ? "x:" + ext : await sha(oldBase + "|" + seenOld[oldBase]);
+          const upd: any = { counterparty: row.counterparty, purpose: row.purpose, raw: t, dedupe_hash: row.dedupe_hash };
+          const { data: hit } = await sb.from("fin_transactions").update(upd).eq("account_id", acc.id).eq("dedupe_hash", oldHash).select("id,category_source");
+          if (hit?.length) {
+            if (cat && hit[0].category_source !== "manual") await sb.from("fin_transactions").update({ category_id: cat, category_source: "rule" }).eq("id", hit[0].id).is("category_id", null);
+            continue;
+          }
+        }
         out.push(row);
       }
       // Vorgemerkte Buchungen werden bei jedem Abruf neu gesetzt
@@ -197,6 +230,7 @@ async function callback(url: URL) {
     }
     const { data: fresh } = await sb.from("fin_bank_connections").select("*").eq("id", conn.id).single();
     const r = await syncConnection(c, fresh);
+    await sb.rpc("fin_detect_contracts").then(() => null, () => null);
     return back({ bank: "ok", name: conn.aspsp_name, n: String(r.inserted) });
   } catch (e) {
     await sb.from("fin_bank_connections").update({ status: "error", last_error: (e as Error).message }).eq("id", conn.id);
@@ -214,8 +248,10 @@ Deno.serve(async (req) => {
   if (req.headers.get("x-cron-secret")) {
     if (req.headers.get("x-cron-secret") !== c.cron_secret) return json({ error: "unauthorized" }, 401);
     const { data: conns } = await sb.from("fin_bank_connections").select("*").eq("status", "active");
+    const cb = await req.json().catch(() => ({}));
     const out = [];
-    for (const conn of conns || []) out.push(await syncConnection(c, conn));
+    for (const conn of conns || []) out.push(await syncConnection(c, conn, undefined, !!cb.reparse));
+    if (cb.detect !== false) await sb.rpc("fin_detect_contracts").then(() => null, () => null);
     return json({ synced: out });
   }
 
@@ -261,6 +297,7 @@ Deno.serve(async (req) => {
         const { data: conns } = await q;
         const out = [];
         for (const conn of conns || []) out.push(await syncConnection(c, conn, psu));
+        await sb.rpc("fin_detect_contracts").then(() => null, () => null);
         return json({ synced: out });
       }
       case "disconnect": {
