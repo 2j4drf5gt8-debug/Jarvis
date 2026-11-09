@@ -11,10 +11,12 @@
 <meta name="apple-mobile-web-app-title" content="Finanzen">
 <title>Finanzen</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="../icons/icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://rxwomtelcddkhyrilhsq.supabase.co wss://rxwomtelcddkhyrilhsq.supabase.co; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
+<script src="supabase.js"></script>
 <style>
 :root{
   --bg:#0C0B0A;--surface:#151413;--surface-2:#1C1B19;--border:#2A2724;--border-input:#6E6962;
@@ -71,11 +73,13 @@ h1{margin:0;font-weight:400;letter-spacing:-.01em;font-size:30px;line-height:36p
 .empty{border:1px dashed var(--border);border-radius:var(--r-lg);padding:28px 20px;text-align:center;color:var(--muted);font-size:14px;line-height:20px}
 .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;z-index:20}
 .sheet{width:100%;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain;background:var(--surface);border-top:1px solid var(--border);border-radius:28px 28px 0 0;padding:20px 20px calc(24px + var(--sab));display:flex;flex-direction:column;gap:16px}
-.toast{position:fixed;left:20px;right:20px;bottom:calc(96px + var(--sab));padding:14px 16px;border-radius:var(--r-md);background:var(--surface-2);border:1px solid var(--border);font-size:14px;z-index:30}
+.toast{position:fixed;left:20px;right:20px;top:calc(12px + var(--sat));padding:14px 16px;border-radius:var(--r-md);background:var(--surface-2);border:1px solid var(--border);font-size:14px;z-index:30}
 .discreet .amt,.discreet .hero{filter:blur(8px)}
 .bar{height:8px;border-radius:999px;background:var(--bg);border:1px solid var(--border);padding:1px}
 .bar i{display:block;height:4px;border-radius:999px;background:var(--accent)}
 .err{color:var(--danger);font-size:13px}
+.spin{animation:spin 900ms linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @media (hover:hover) and (pointer:fine){.btn:hover{filter:brightness(1.08)}.chip:hover{color:var(--text)}}
 </style>
@@ -222,7 +226,7 @@ const SB_URL = 'https://rxwomtelcddkhyrilhsq.supabase.co';
 const SB_KEY = 'sb_publishable_7ZfExgJbLXFw7-BJO5zSnA_rkpF5UtY';
 const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
-const S = { user: null, tab: 'home', accounts: [], tx: [], cats: {}, catList: [], rules: [], filter: 'all', q: '', discreet: false, sheet: null, toast: null, loading: true, err: null };
+const S = { conns: [], bankCfg: null, syncing: false, user: null, tab: 'home', accounts: [], tx: [], cats: {}, catList: [], rules: [], filter: 'all', q: '', discreet: false, sheet: null, toast: null, loading: true, err: null };
 try { S.discreet = localStorage.getItem('fin_discreet') === '1'; } catch (e) {}
 
 const $ = s => document.querySelector(s);
@@ -258,13 +262,15 @@ function toast(msg) { S.toast = msg; render(); clearTimeout(toast.t); toast.t = 
 /* ===== Daten ===== */
 async function load() {
   S.loading = true; render();
-  const [a, c, r, t] = await Promise.all([
+  const [a, c, r, t, k] = await Promise.all([
     sb.from('fin_accounts').select('*').eq('archived', false).order('created_at'),
     sb.from('fin_categories').select('*').order('name'),
     sb.from('fin_category_rules').select('*').order('priority'),
-    sb.from('fin_transactions').select('id,account_id,booked_on,amount_cents,counterparty,purpose,category_id,status,is_split_parent,note').order('booked_on', { ascending: false }).order('created_at', { ascending: false }).limit(1000)
+    sb.from('fin_transactions').select('id,account_id,booked_on,amount_cents,counterparty,purpose,category_id,status,is_split_parent,note').order('booked_on', { ascending: false }).order('created_at', { ascending: false }).limit(1000),
+    sb.from('fin_bank_connections').select('id,aspsp_name,status,consent_valid_until,last_error,updated_at').in('status', ['active', 'expired', 'error']).order('created_at', { ascending: false })
   ]);
-  const e = a.error || c.error || r.error || t.error;
+  S.conns = k.data || [];
+  const e = a.error || c.error || r.error || t.error || k.error;
   S.err = e ? e.message : null;
   S.accounts = a.data || []; S.catList = c.data || []; S.rules = r.data || []; S.tx = t.data || [];
   S.cats = Object.fromEntries(S.catList.map(x => [x.id, x]));
@@ -292,6 +298,40 @@ async function importCsv(file, accountId, newBalance) {
   return { total: rows.length, inserted, skipped: rows.length - inserted, bad: res.errors.length };
 }
 
+async function fn(body) {
+  const { data: { session } } = await sb.auth.getSession();
+  const r = await fetch(SB_URL + '/functions/v1/fin-bank', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY, Authorization: 'Bearer ' + (session ? session.access_token : '') }, body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || ('Fehler ' + r.status));
+  return d;
+}
+async function syncNow() {
+  if (S.syncing) return;
+  S.syncing = true; render();
+  try {
+    const d = await fn({ action: 'sync' });
+    const n = (d.synced || []).reduce((s, x) => s + x.inserted, 0);
+    const errs = (d.synced || []).flatMap(x => x.errors || []);
+    toast(errs.length ? 'Teilweise aktualisiert: ' + errs[0] : (n ? n + ' neue Buchungen' : 'Alles aktuell'));
+  } catch (e) { toast('Abruf fehlgeschlagen: ' + e.message); }
+  S.syncing = false; await load();
+}
+async function openBank() {
+  S.sheet = { kind: 'bank', step: 'loading' }; render();
+  try {
+    const st = await fn({ action: 'status' });
+    S.bankCfg = st;
+    if (!st.configured) { S.sheet = { kind: 'bank', step: 'setup', redirect: st.redirect_url }; render(); return; }
+    const d = await fn({ action: 'aspsps', country: 'DE' });
+    S.sheet = { kind: 'bank', step: 'pick', list: d.aspsps || [], q: '' }; render();
+  } catch (e) { S.sheet = { kind: 'bank', step: 'error', err: e.message }; render(); }
+}
+async function startBank(name, max) {
+  S.sheet.busy = name; render();
+  try { const d = await fn({ action: 'start', name, country: 'DE', max }); location.href = d.url; }
+  catch (e) { S.sheet.busy = null; S.sheet.err = e.message; render(); }
+}
+
 /* ===== Ansichten ===== */
 function vLogin() {
   return `<div class="scroll stack" style="justify-content:center;gap:24px">
@@ -311,14 +351,20 @@ function vHome() {
   const monthStart = new Date().toISOString().slice(0, 8) + '01';
   const monthSum = S.tx.filter(x => x.booked_on >= monthStart && !x.is_split_parent).reduce((s, x) => s + Number(x.amount_cents), 0);
   const main = Math.floor(Math.abs(t) / 100).toLocaleString('de-DE'), cents = String(Math.abs(t) % 100).padStart(2, '0');
-  const accs = S.accounts.map(a => `<button class="row tap" data-act="open-account" data-id="${a.id}" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;padding:0;text-align:left">
-      <span class="stack" style="gap:2px"><span style="font-size:16px">${esc(a.name)}</span><span class="muted" style="font-size:12px">${esc(a.bank_name || ({ bargeld: 'manuell erfasst' }[a.type] || a.type))}${a.last_sync_at ? ' · Import ' + new Date(a.last_sync_at).toLocaleDateString('de-DE') : ''}</span></span>
+  const accs = S.accounts.map(a => `<button class="row tap" data-act="${a.source === 'psd2' ? 'sync' : 'open-account'}" data-id="${a.id}" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;padding:0;text-align:left">
+      <span class="stack" style="gap:2px"><span style="font-size:16px">${esc(a.name)}</span><span class="muted" style="font-size:12px">${esc(a.bank_name || ({ bargeld: 'manuell erfasst' }[a.type] || a.type))}${a.last_sync_at ? (a.source === 'psd2' ? ' · abgerufen ' : ' · Import ') + new Date(a.last_sync_at).toLocaleString('de-DE', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span></span>
       ${eur(Number(a.balance_cents))}</button>`).join('');
   return `<div class="scroll stack" style="gap:20px">
     <header style="display:flex;justify-content:space-between;align-items:center">
       <div class="stack" style="gap:4px"><span class="over">Gesamtsaldo</span><span class="muted" style="font-size:14px">${new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}</span></div>
-      <button class="icon-btn" data-act="discreet" aria-label="${S.discreet ? 'Beträge zeigen' : 'Beträge verbergen'}">${svg(S.discreet ? 'eyeoff' : 'eye', 18)}</button>
+      <span style="display:flex;gap:8px">
+        ${S.conns.some(c => c.status === 'active') ? `<button class="icon-btn" data-act="sync" aria-label="Konten abrufen"${S.syncing ? ' disabled' : ''}><span class="${S.syncing ? 'spin' : ''}" style="display:flex">${svg('repeat', 18)}</span></button>` : ''}
+        <button class="icon-btn" data-act="discreet" aria-label="${S.discreet ? 'Beträge zeigen' : 'Beträge verbergen'}">${svg(S.discreet ? 'eyeoff' : 'eye', 18)}</button>
+      </span>
     </header>
+    ${S.conns.filter(c => c.status !== 'active' || c.last_error).slice(0, 2).map(c => `<div class="card" style="padding:14px;display:flex;gap:12px;align-items:center;border-color:rgba(194,113,95,.45)">
+      <span style="flex:1;font-size:13px;line-height:18px"><b style="font-weight:500">${esc(c.aspsp_name)}</b><br><span class="muted">${c.status === 'expired' ? 'Freigabe abgelaufen' : esc(c.last_error || 'Verbindung fehlgeschlagen')}</span></span>
+      <button class="btn" data-act="bank">Neu verbinden</button></div>`).join('')}
     <section class="stack" style="gap:8px">
       <div class="hero">${t < 0 ? '−' : ''}${main}<span class="c">,${cents} €</span></div>
       ${S.tx.length ? `<span class="muted" style="font-size:13px">Diesen Monat: <span class="${monthSum >= 0 ? 'pos' : ''}">${eur(monthSum, true)}</span></span>` : ''}
@@ -326,11 +372,12 @@ function vHome() {
     <section class="stack">
       <span class="over" style="margin-bottom:4px">Konten</span>
       ${accs || '<div class="empty">Noch kein Konto. Lege eins an und lade eine CSV aus deinem Online-Banking hoch.</div>'}
-      <button class="row tap" data-act="new-account" style="width:100%;background:none;border:0;padding:0;text-align:left;color:var(--text)">
-        <span class="stack" style="gap:2px"><span style="font-size:16px">Konto hinzufügen</span><span class="muted" style="font-size:12px">Sparkasse, Trade Republic, Bargeld</span></span>
+      <button class="row tap" data-act="add" style="width:100%;background:none;border:0;padding:0;text-align:left;color:var(--text)">
+        <span class="stack" style="gap:2px"><span style="font-size:16px">Konto hinzufügen</span><span class="muted" style="font-size:12px">Bank verbinden, Bargeld oder CSV</span></span>
         <span style="color:var(--accent)">${svg('plus', 20)}</span></button>
     </section>
-    ${S.accounts.length ? `<button class="btn primary block" data-act="import">${svg('upload', 16, 2)} &nbsp;CSV importieren</button>` : ''}
+    ${S.accounts.length ? '' : `<button class="btn primary block" data-act="bank">Bank verbinden</button>`}
+    <button class="btn block" data-act="logout" style="background:transparent;color:var(--muted);font-weight:400">Abmelden</button>
   </div>`;
 }
 
@@ -389,6 +436,46 @@ function vSoon(title, text) {
 function vSheet() {
   if (!S.sheet) return '';
   const close = `<button class="icon-btn" data-act="close" aria-label="Schließen">${svg('close', 16)}</button>`;
+  if (S.sheet.kind === 'add') {
+    const opt = (act, t, d) => `<button class="row tap" data-act="${act}" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;padding:0;text-align:left;color:var(--text)"><span class="stack" style="gap:2px"><span style="font-size:16px">${t}</span><span class="muted" style="font-size:12px">${d}</span></span><span style="color:var(--accent)">${svg('plus', 18)}</span></button>`;
+    return `<div class="sheet-bg" data-act="close-bg"><div class="sheet" role="dialog" aria-label="Konto hinzufügen">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span class="over" style="color:var(--accent)">Konto hinzufügen</span>${close}</div>
+      <div class="stack">${opt('bank', 'Bank verbinden', 'Automatisch, nur lesend – Sparkasse, Trade Republic …')}${opt('new-account', 'Bargeld oder manuelles Konto', 'Buchungen selbst erfassen')}${S.accounts.length ? opt('import', 'CSV importieren', 'Für Banken ohne Anbindung') : ''}</div></div></div>`;
+  }
+  if (S.sheet.kind === 'bank') {
+    const sh = S.sheet;
+    const head = `<div style="display:flex;justify-content:space-between;align-items:center"><span class="over" style="color:var(--accent)">Bank verbinden</span>${close}</div>`;
+    const safe = `<div class="card" style="padding:14px;font-size:13px;line-height:19px;color:var(--muted)"><b style="color:var(--text);font-weight:500">Nur lesend.</b> Die App sieht Kontostand und Umsätze, kann aber nie Geld bewegen. Ihre PIN und TAN geben Sie nur auf der Seite Ihrer Bank ein – die App sieht sie nie. Freigabe max. 180 Tage, jederzeit widerrufbar.</div>`;
+    let body = '';
+    if (sh.step === 'loading') body = '<p class="muted">Lade …</p>';
+    else if (sh.step === 'error') body = `<p class="err" role="alert">${esc(sh.err)}</p>`;
+    else if (sh.step === 'setup') body = `
+      <p style="margin:0;font-size:14px;line-height:21px">Einmalig: Zugang bei <b style="font-weight:500">Enable Banking</b> anlegen (kostenlos für private Nutzung, am besten am Mac):</p>
+      <ol style="margin:0;padding-left:20px;font-size:14px;line-height:22px;color:var(--muted)">
+        <li>enablebanking.com → Sign in mit Ihrer E-Mail</li>
+        <li>API applications → Add a new application → Environment <b style="color:var(--text);font-weight:500">Production</b></li>
+        <li>Redirect URL eintragen:<br><code style="font-size:12px;color:var(--text);word-break:break-all;user-select:all">${esc(sh.redirect)}</code></li>
+        <li>Register → eine <b style="color:var(--text);font-weight:500">.pem</b>-Datei wird heruntergeladen (Name = App-ID)</li>
+        <li>„Activate by linking accounts“ → Sparkasse und Trade Republic verknüpfen</li>
+        <li>Hier App-ID und .pem-Datei hochladen</li>
+      </ol>
+      <form id="eb-form" class="stack" style="gap:14px">
+        <label class="field">App-ID<input name="app" autocomplete="off" autocapitalize="none" autocorrect="off" placeholder="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" required></label>
+        <label class="field">Schlüsseldatei (.pem)<input name="pem" type="file" accept=".pem,application/x-pem-file,text/plain" required style="padding:10px 14px;height:auto"></label>
+        ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}
+        <button class="btn primary block" type="submit"${sh.busy ? ' disabled' : ''}>${sh.busy ? 'Prüfe Schlüssel …' : 'Speichern und prüfen'}</button>
+      </form>`;
+    else {
+      const q = (sh.q || '').toLowerCase();
+      const fav = ['Sparkasse LeerWittmund', 'Trade Republic'];
+      const list = sh.list.filter(a => !q || a.name.toLowerCase().includes(q)).sort((a, b) => (fav.some(f => b.name.includes(f)) - fav.some(f => a.name.includes(f))) || a.name.localeCompare(b.name)).slice(0, 40);
+      body = `<label class="field"><span class="sr">Bank suchen</span><input id="bq" type="search" placeholder="Bank suchen, z. B. LeerWittmund" value="${esc(sh.q || '')}" autocomplete="off"></label>
+        <div class="stack">${list.map(a => `<button class="row tap" data-act="pick-bank" data-name="${esc(a.name)}" data-max="${a.max || ''}" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;padding:0;text-align:left;color:var(--text)"${sh.busy ? ' disabled' : ''}>
+          <span style="font-size:15px">${esc(a.name)}${a.beta ? ' <span class="muted" style="font-size:12px">(Beta)</span>' : ''}</span><span class="muted" style="font-size:13px">${sh.busy === a.name ? 'öffne Bank …' : ''}</span></button>`).join('') || '<p class="muted">Keine Bank gefunden.</p>'}</div>
+        ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}`;
+    }
+    return `<div class="sheet-bg" data-act="close-bg"><div class="sheet" role="dialog" aria-label="Bank verbinden">${head}${safe}${body}</div></div>`;
+  }
   if (S.sheet.kind === 'account') {
     return `<div class="sheet-bg" data-act="close-bg"><form class="sheet" id="acc-form" role="dialog" aria-label="Konto anlegen">
       <div style="display:flex;justify-content:space-between;align-items:center"><span class="over" style="color:var(--accent)">Neues Konto</span>${close}</div>
@@ -451,16 +538,30 @@ document.addEventListener('click', async e => {
   else if (act === 'discreet') { S.discreet = !S.discreet; try { localStorage.setItem('fin_discreet', S.discreet ? '1' : '0'); } catch (x) {} render(); }
   else if (act === 'filter') { S.filter = b.dataset.f; render(); }
   else if (act === 'new-account') { S.sheet = { kind: 'account' }; render(); }
+  else if (act === 'add') { S.sheet = { kind: 'add' }; render(); }
+  else if (act === 'bank') { openBank(); }
+  else if (act === 'pick-bank') { startBank(b.dataset.name, Number(b.dataset.max) || undefined); }
+  else if (act === 'sync') { syncNow(); }
+  else if (act === 'logout') { await sb.auth.signOut(); S.accounts = []; S.tx = []; S.conns = []; render(); }
   else if (act === 'import' || act === 'open-account') { S.sheet = { kind: 'import', acc: b.dataset.id || (S.accounts[0] && S.accounts[0].id) }; render(); }
   else if (act === 'close' || act === 'close-bg') { const reload = S.sheet && S.sheet.result; S.sheet = null; render(); if (reload) load(); }
 });
-document.addEventListener('input', e => { if (e.target.id === 'q') { S.q = e.target.value; render(); } });
+document.addEventListener('input', e => {
+  if (e.target.id === 'q') { S.q = e.target.value; render(); }
+  if (e.target.id === 'bq' && S.sheet) { S.sheet.q = e.target.value; render(); const x = $('#bq'); x.focus(); x.setSelectionRange(x.value.length, x.value.length); }
+});
 document.addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target, d = new FormData(f);
   if (f.id === 'login') {
     const { error } = await sb.auth.signInWithPassword({ email: d.get('email'), password: d.get('pw') });
     S.err = error ? 'Anmeldung fehlgeschlagen: ' + error.message : null; render();
+  } else if (f.id === 'eb-form') {
+    const file = d.get('pem');
+    if (!file || !file.size || file.size > 20000) { S.sheet.err = 'Bitte die .pem-Datei von Enable Banking wählen.'; render(); return; }
+    S.sheet.busy = true; S.sheet.err = null; render();
+    try { await fn({ action: 'setup', app_id: String(d.get('app')).trim(), pem: await file.text() }); toast('Enable Banking eingerichtet'); openBank(); }
+    catch (err) { S.sheet.busy = false; S.sheet.err = err.message; render(); }
   } else if (f.id === 'acc-form') {
     S.sheet.v = { name: d.get('name'), bank: d.get('bank'), bal: d.get('bal') };
     const bal = parseEuro(d.get('bal'));
@@ -479,6 +580,16 @@ document.addEventListener('submit', async e => {
     S.sheet.busy = false; render();
   }
 });
+
+(() => {
+  const p = new URLSearchParams(location.search);
+  if (!p.has('bank')) return;
+  const st = p.get('bank');
+  setTimeout(() => toast(st === 'ok' ? `${p.get('name')} verbunden · ${p.get('n') || 0} Buchungen geladen`
+    : st === 'empty' ? `${p.get('name')}: keine Konten freigegeben. Im Enable-Banking-Control-Panel verknüpft?`
+    : 'Verbindung fehlgeschlagen: ' + (p.get('msg') || 'unbekannt')), 600);
+  history.replaceState(null, '', location.pathname);
+})();
 
 sb.auth.onAuthStateChange((_ev, session) => {
   const was = S.user; S.user = session ? session.user : null;
