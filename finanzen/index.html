@@ -106,6 +106,12 @@ textarea{width:100%;min-height:72px;padding:12px 14px;border-radius:var(--r-md);
 textarea:focus{border-color:var(--accent)}
 
 /* ===== Apple-Feinschliff ===== */
+.fold{padding:0 16px}
+.fold summary{list-style:none;display:flex;justify-content:space-between;align-items:center;min-height:52px;font-size:15px;cursor:pointer;-webkit-user-select:none;user-select:none}
+.fold summary::-webkit-details-marker{display:none}
+.fold summary svg{color:var(--muted);transition:transform 200ms var(--ease-out)}
+.fold[open] summary svg{transform:rotate(90deg)}
+.fold-body{padding:0 0 14px}
 :root{--ease-out:cubic-bezier(.23,1,.32,1);--ease-drawer:cubic-bezier(.32,.72,0,1)}
 body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 h1{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,sans-serif;font-weight:700;font-size:32px;line-height:38px;letter-spacing:-.022em}
@@ -452,7 +458,7 @@ function wealth() {
   return { cash, inv, val, total: cash + val };
 }
 function outlook() {
-  const ms = []; for (let i = 3; i >= 1; i--) { const [f, e] = monthRange(-i); const xs = leaves().filter(t => t.booked_on >= f && t.booked_on <= e && !isTransfer(t) && t.status === 'booked'); ms.push({ label: new Date(f + 'T12:00:00').toLocaleDateString('de-DE', { month: 'short' }), net: xs.reduce((s, t) => s + Number(t.amount_cents), 0) }); }
+  const ms = []; for (let i = 3; i >= 1; i--) { const [f, e] = monthRange(-i); const xs = leaves().filter(t => t.booked_on >= f && t.booked_on <= e && !isTransfer(t) && t.status === 'booked'); ms.push({ label: new Date(f + 'T12:00:00').toLocaleDateString('de-DE', { month: 'short' }), net: xs.reduce((s, t) => s + Number(t.amount_cents), 0), inc: xs.filter(t => t.amount_cents > 0).reduce((s, t) => s + Number(t.amount_cents), 0), out: -xs.filter(t => t.amount_cents < 0).reduce((s, t) => s + Number(t.amount_cents), 0) }); }
   const avg = Math.round(ms.reduce((s, m) => s + m.net, 0) / ms.length);
   const cash = wealth().cash;
   const at = n => cash + avg * n;
@@ -616,96 +622,55 @@ function cancelBy(c) {
 }
 
 function vBudget() {
-  const f = freeToSpend(), fc = forecast(30);
-  const W = 326, H = 96, pad = 6;
-  const vals = fc.pts.map(p => p.v); let mx = Math.max(...vals), mn = Math.min(...vals); const padv = Math.max(2000, (mx - mn) * 0.15); mx += padv; mn -= padv;
-  const y = v => pad + (H - 2 * pad) * (1 - (v - mn) / ((mx - mn) || 1));
-  const pts = fc.pts.map((p, i) => `${Math.round(i / (fc.pts.length - 1) * W)},${Math.round(y(p.v))}`).join(' ');
-  const zero = mn < 0 ? `<line x1="0" y1="${y(0)}" x2="${W}" y2="${y(0)}" stroke="var(--danger)" stroke-dasharray="3 4" stroke-width="1"/>` : '';
+  const w = wealth(), o = outlook(), t = TODAY();
   const [mf, me] = monthRange(0);
-  const budgets = S.budgets.map(b => { const c = S.cats[b.category_id] || { name: '?' }; const sp = spentIn(b.category_id, mf, me); const pct = Math.round(sp / b.amount_cents * 100); return { b, c, sp, pct }; }).sort((a, b) => b.pct - a.pct);
+  const daysLeft = Math.max(0, daysBetween(t, me));
+  const endOfMonth = o.cash + Math.round(o.avg * daysLeft / 30);
+  const runOut = o.avg < 0 && o.cash > 0 ? addMonths(t, Math.floor(o.cash / -o.avg)) : null;
+  const inc = Math.round(o.ms.reduce((s, m) => s + m.inc, 0) / o.ms.length), out = Math.round(o.ms.reduce((s, m) => s + m.out, 0) / o.ms.length);
+  const big = (label, v, sub = '') => `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:14px 0;border-bottom:1px solid var(--border)"><span class="stack" style="gap:2px"><span style="font-size:15px">${label}</span>${sub ? `<span class="muted" style="font-size:12px">${sub}</span>` : ''}</span><span style="font-size:22px" class="${v < 0 ? 'neg' : ''}">${eur(v)}</span></div>`;
+  // Budgets
+  const budgets = S.budgets.map(b => { const c = S.cats[b.category_id] || { name: '?' }; const sp = spentIn(b.category_id, mf, me); return { b, c, sp, pct: Math.round(sp / b.amount_cents * 100) }; }).sort((a, b) => b.pct - a.pct);
+  // Details
   const ms = monthStats(6); const mmax = Math.max(1, ...ms.map(m => Math.max(m.inc, m.out)));
   const catTot = {};
-  for (const t of leaves().filter(t => t.booked_on >= mf && t.amount_cents < 0 && !isTransfer(t))) catTot[t.category_id || ''] = (catTot[t.category_id || ''] || 0) - Number(t.amount_cents);
+  for (const x of leaves().filter(x => x.booked_on >= mf && x.amount_cents < 0 && !isTransfer(x))) catTot[x.category_id || ''] = (catTot[x.category_id || ''] || 0) - Number(x.amount_cents);
   const tops = Object.entries(catTot).sort((a, b) => b[1] - a[1]).slice(0, 7); const tmax = Math.max(1, ...tops.map(x => x[1]));
-  return `<div class="scroll stack" style="gap:20px">
-    <header class="stack" style="gap:4px"><h1>Geld & Budget</h1><span class="muted" style="font-size:13px">Frei verfügbar ${f.label}</span></header>
-    <section class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="muted" style="font-size:14px">Frei verfügbar</span><span class="muted" style="font-size:12px">≈ ${eurPlain(f.perDay)} / Tag · ${f.days} Tage</span></div>
-      <span style="font-size:36px;color:${f.free < 0 ? 'var(--danger)' : 'var(--accent)'}">${eur(f.free)}</span>
-      ${!f.income ? `<span class="muted" style="font-size:12px;line-height:17px">Kein regelmäßiges Einkommen bestätigt – Zeitraum bis Monatsende. Bestätige BAföG/Gehalt unter Verträge, dann rechnet die App von Zahltag zu Zahltag.</span>` : ''}
-      <div class="stack">${f.upcoming.slice(0, 5).map(x => `<div class="kv"><span>${fmtDate(x.d)} · ${esc(x.c.provider)}</span>${eur(Number(x.c.amount_cents))}</div>`).join('') || '<span class="muted" style="font-size:13px">Keine Vertragsabbuchungen mehr im Zeitraum.</span>'}</div>
-    </section>
-    <section class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:14px;font-weight:500">Prognose Girokonto</span><span class="muted" style="font-size:12px">in 30 Tagen: ${eurPlain(fc.pts[fc.pts.length - 1].v)}</span></div>
-      <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Kontostand von ${eurPlain(fc.pts[0].v)} heute auf ${eurPlain(fc.pts[fc.pts.length - 1].v)} in 30 Tagen, tiefster Stand ${eurPlain(fc.min)}">
-        ${zero}<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>
-      <div style="display:flex;justify-content:space-between;font-size:12px" class="muted"><span>heute</span><span>tiefster Stand ${eurPlain(fc.min)}</span><span>${fmtDate(fc.end)}</span></div>
-      <span class="muted" style="font-size:12px">Nur bekannte Verträge und Einnahmen – spontane Ausgaben sind nicht eingerechnet.</span>
-    </section>
-    ${vWealth()}
-    <section class="stack" style="gap:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center"><span class="over">Budgets · ${new Date().toLocaleDateString('de-DE', { month: 'long' })}</span><button class="btn" data-act="new-budget" style="height:36px">+ Budget</button></div>
-      ${budgets.map(({ b, c, sp, pct }) => `<button class="card tap" data-act="budget" data-id="${b.id}" style="padding:14px;display:flex;flex-direction:column;gap:8px;text-align:left;color:var(--text)">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;width:100%"><span style="font-size:15px;font-weight:500">${esc(c.name)}</span><span style="font-size:15px;color:${pct > 100 ? 'var(--danger)' : 'var(--text)'}">${eurPlain(sp)}<span class="muted" style="font-size:12px"> / ${eurPlain(b.amount_cents)}</span></span></div>
-        <div class="bar" style="width:100%"><i style="width:${Math.min(100, pct)}%;background:${pct > 100 ? 'var(--danger)' : pct > 85 ? '#D9A55B' : 'var(--accent)'}"></i></div>
-        <span style="font-size:12px;color:${pct > 100 ? 'var(--danger)' : 'var(--muted)'}">${pct > 100 ? eurPlain(sp - b.amount_cents) + ' über dem Budget' : 'noch ' + eurPlain(b.amount_cents - sp)}</span></button>`).join('') || '<div class="empty">Noch keine Budgets. Lege z. B. eins für Lebensmittel oder Ausgehen an.</div>'}
-    </section>
-    <section class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px">
-      <span style="font-size:14px;font-weight:500">Einnahmen und Ausgaben</span>
-      <div style="display:grid;grid-template-columns:repeat(${ms.length},minmax(0,1fr));gap:8px;align-items:end;height:110px" role="img" aria-label="Letzte ${ms.length} Monate: ${ms.map(m => `${m.label} Einnahmen ${eurPlain(m.inc)}, Ausgaben ${eurPlain(m.out)}`).join('; ')}">
-        ${ms.map(m => `<div style="display:flex;gap:3px;align-items:end;justify-content:center;height:100%"><i style="display:block;width:9px;border-radius:3px 3px 0 0;background:var(--income);height:${Math.max(2, m.inc / mmax * 100)}%"></i><i style="display:block;width:9px;border-radius:3px 3px 0 0;background:var(--muted);height:${Math.max(2, m.out / mmax * 100)}%"></i></div>`).join('')}
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(${ms.length},minmax(0,1fr));gap:8px;font-size:12px;text-align:center" class="muted">${ms.map(m => `<span>${m.label}</span>`).join('')}</div>
-      <div style="display:flex;gap:16px;font-size:12px" class="muted"><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--income)"></i> Einnahmen</span><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--muted)"></i> Ausgaben</span><span>ohne Umbuchungen</span></div>
-    </section>
-    <section class="card" style="padding:4px 16px 8px">
-      <span class="over" style="display:block;padding:12px 0 4px">Ausgaben ${new Date().toLocaleDateString('de-DE', { month: 'long' })}</span>
-      ${tops.map(([id, v]) => rowBtn('cat-tx', `data-id="${id}"`, `<span class="stack" style="gap:6px;flex:1;margin-right:12px"><span style="font-size:14px">${esc((S.cats[id] || {}).name || 'Ohne Kategorie')}</span><span class="bar" style="height:6px"><i style="width:${v / tmax * 100}%;height:2px;background:var(--accent)"></i></span></span>`, `<span style="font-size:14px">${eurPlain(v)}</span>`)).join('') || '<p class="muted" style="font-size:13px">Noch keine Ausgaben diesen Monat.</p>'}
-    </section>
-  </div>`;
-}
+  const approx = S.positions.some(p => /ungef/i.test(p.name));
+  const detail = (title, inner) => `<details class="card fold"><summary><span>${title}</span>${svg('chev', 16)}</summary><div class="fold-body">${inner}</div></details>`;
+  return `<div class="scroll stack" style="gap:16px">
+    <header class="stack" style="gap:4px"><h1>Geld</h1><span class="muted" style="font-size:13px">Stand ${fmtDate(t, { day: 'numeric', month: 'long' })}</span></header>
 
-function vWealth() {
-  const w = wealth(), o = outlook();
-  const gain = w.val - w.inv, gainPct = w.inv ? Math.round(gain / w.inv * 1000) / 10 : 0;
-  const pos = S.positions.map(p => { const g = Number(p.value_cents) - Number(p.invested_cents); return rowBtn('position', `data-id="${p.id}"`,
-    `<span class="stack" style="gap:2px"><span style="font-size:15px">${esc(p.name)}</span><span class="muted" style="font-size:12px">investiert ${eurPlain(p.invested_cents)} · Stand ${fmtDate(p.value_updated_at)}</span></span>`,
-    `<span style="text-align:right">${eur(Number(p.value_cents))}<span style="display:block;font-size:12px" class="${g > 0 ? 'pos' : g < 0 ? 'neg' : 'muted'}">${g ? (g > 0 ? '+ ' : '−') + eurPlain(Math.abs(g)) : '±0'}</span></span>`); }).join('');
-  const W = 326, H = 80; const pts = [0, 1, 2, 3, 4, 5, 6].map(n => o.at(n)); const mx = Math.max(...pts, 0), mn = Math.min(...pts, 0);
-  const y = v => 6 + (H - 12) * (1 - (v - mn) / ((mx - mn) || 1));
-  const line = pts.map((v, i) => `${Math.round(i / 6 * W)},${Math.round(y(v))}`).join(' ');
-  return `<section class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px">
-      <span class="muted" style="font-size:14px">Gesamtvermögen</span>
-      <span style="font-size:36px">${eur(w.total)}</span>
-      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
-        <div class="card" style="padding:12px;background:var(--bg)"><span class="muted" style="font-size:12px">Cash</span><div style="font-size:20px">${eur(w.cash)}</div></div>
-        <div class="card" style="padding:12px;background:var(--bg)"><span class="muted" style="font-size:12px">Depot & Krypto</span><div style="font-size:20px">${eur(w.val)}</div></div>
-      </div>
-      <div class="stack">${cashAccounts().map(a => `<div class="kv"><span>${esc(a.name)}${a.bank_name ? ' · ' + esc(a.bank_name) : ''}</span>${eur(Number(a.balance_cents))}</div>`).join('')}</div>
+    <section class="card" style="padding:18px;display:flex;flex-direction:column;gap:8px">
+      <span class="muted" style="font-size:14px">Cash jetzt (alle Konten)</span>
+      <span style="font-size:40px;line-height:44px">${eur(w.cash)}</span>
+      <span class="muted" style="font-size:13px">${cashAccounts().map(a => esc(a.bank_name || a.name) + ' ' + eurPlain(a.balance_cents)).join(' · ')}</span>
     </section>
-    <section class="card" style="padding:4px 16px 12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0 4px"><span class="over">Depot</span><button class="btn" data-act="new-position" style="height:36px">+ Position</button></div>
-      <div class="kv"><span>Investiert</span><span>${eurPlain(w.inv)}</span></div>
-      <div class="kv"><span>Aktueller Wert</span><span>${eurPlain(w.val)}</span></div>
-      <div class="kv"><span>Gewinn / Verlust</span><span class="${gain > 0 ? 'pos' : gain < 0 ? 'neg' : ''}">${gain >= 0 ? '+ ' : '−'}${eurPlain(Math.abs(gain))} (${gainPct >= 0 ? '+' : ''}${String(gainPct).replace('.', ',')} %)</span></div>
-      <span class="over" style="display:block;padding:14px 0 2px;font-size:11px">Positionen</span>
-      ${pos || '<p class="muted" style="font-size:13px">Noch keine Positionen.</p>'}
-      <p class="muted" style="font-size:12px;line-height:17px;margin:10px 0 0">Depotwerte trägst du von Hand ein – die Bankschnittstelle (PSD2) liefert keine Wertpapiere. Antippen zum Aktualisieren.</p>
+
+    <section class="card" style="padding:18px 18px 6px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:17px;font-weight:600">Prognose Cash</span><span class="muted" style="font-size:12px">wenn du so weitermachst</span></div>
+      <p class="muted" style="font-size:13px;line-height:18px;margin:6px 0 2px">Pro Monat im Schnitt: <span class="pos">+${eurPlain(inc)}</span> rein, ${eurPlain(out)} raus → <b style="font-weight:600;color:${o.avg < 0 ? 'var(--danger)' : 'var(--income)'}">${o.avg < 0 ? '−' : '+'}${eurPlain(Math.abs(o.avg))}</b></p>
+      ${big('Heute', o.cash)}
+      ${big('Ende ' + new Date().toLocaleDateString('de-DE', { month: 'long' }), endOfMonth, `noch ${daysLeft} Tage`)}
+      ${big('In 3 Monaten', o.at(3), fmtDate(addMonths(t, 3), { month: 'long', year: 'numeric' }))}
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:14px 0"><span class="stack" style="gap:2px"><span style="font-size:15px">In 6 Monaten</span><span class="muted" style="font-size:12px">${fmtDate(addMonths(t, 6), { month: 'long', year: 'numeric' })}</span></span><span style="font-size:22px" class="${o.at(6) < 0 ? 'neg' : ''}">${eur(o.at(6))}</span></div>
+      ${runOut ? `<div style="margin:0 -18px;padding:12px 18px;border-top:1px solid var(--border);font-size:14px;color:var(--danger)">Bei diesem Tempo ist dein Cash etwa im <b style="font-weight:600">${fmtDate(runOut, { month: 'long', year: 'numeric' })}</b> aufgebraucht.</div>` : o.avg >= 0 ? `<div style="margin:0 -18px;padding:12px 18px;border-top:1px solid var(--border);font-size:14px" class="pos">Du baust im Schnitt Geld auf.</div>` : ''}
     </section>
-    <section class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px">
-      <span style="font-size:14px;font-weight:500">Wenn du so weitermachst</span>
-      <span class="muted" style="font-size:13px;line-height:18px">Ø ${o.avg >= 0 ? '+' : '−'} ${eurPlain(Math.abs(o.avg))} pro Monat (Einnahmen minus Ausgaben, ${o.ms.map(m => m.label).join(', ')}, ohne Umbuchungen)</span>
-      <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Cash heute ${eurPlain(o.cash)}, in 6 Monaten ${eurPlain(o.at(6))}">
-        ${mn < 0 ? `<line x1="0" y1="${y(0)}" x2="${W}" y2="${y(0)}" stroke="var(--danger)" stroke-dasharray="3 4" stroke-width="1"/>` : ''}
-        <polyline points="${line}" fill="none" stroke="${o.avg < 0 ? 'var(--danger)' : 'var(--income)'}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>
-      <div class="kv"><span>Cash heute</span>${eur(o.cash)}</div>
-      <div class="kv"><span>in 1 Monat</span>${eur(o.at(1))}</div>
-      <div class="kv"><span>in 3 Monaten</span>${eur(o.at(3))}</div>
-      <div class="kv"><span>in 6 Monaten</span><b style="font-weight:500" class="${o.at(6) < 0 ? 'neg' : ''}">${eur(o.at(6))}</b></div>
-      ${o.months !== null ? `<span style="font-size:13px;color:${o.months < 6 ? 'var(--danger)' : 'var(--muted)'}">Bei diesem Tempo reicht dein Cash noch etwa ${String(o.months).replace('.', ',')} Monate.</span>` : '<span class="pos" style="font-size:13px">Du gibst im Schnitt weniger aus, als reinkommt.</span>'}
-      <span class="muted" style="font-size:12px;line-height:17px">Einfache Hochrechnung. Einmalige Eingänge (z. B. Stipendium) und Käufe über Trade Republic (die Bank liefert keine Details) verzerren den Schnitt.</span>
-    </section>`;
+    <p class="muted" style="font-size:12px;line-height:17px;margin:-6px 4px 0">Schnitt aus ${o.ms.map(m => m.label).join(', ')} (ohne Umbuchungen). Einmalzahlungen und Trade-Republic-Buchungen ohne Angaben können ihn verzerren – je mehr du kategorisierst, desto genauer.</p>
+
+    <section class="stack" style="gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span class="over">Budgets ${new Date().toLocaleDateString('de-DE', { month: 'long' })}</span><button class="btn" data-act="new-budget" style="height:36px">+ Budget</button></div>
+      ${budgets.map(({ b, c, sp, pct }) => `<button class="card tap" data-act="budget" data-id="${b.id}" style="padding:12px 14px;display:flex;flex-direction:column;gap:8px;text-align:left;color:var(--text)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;width:100%"><span style="font-size:15px">${esc(c.name)}</span><span style="font-size:14px;color:${pct > 100 ? 'var(--danger)' : 'var(--muted)'}">${pct > 100 ? eurPlain(sp - b.amount_cents) + ' drüber' : 'noch ' + eurPlain(b.amount_cents - sp)}</span></div>
+        <div class="bar" style="width:100%"><i style="width:${Math.min(100, pct)}%;background:${pct > 100 ? 'var(--danger)' : 'var(--accent)'}"></i></div></button>`).join('') || '<button class="empty tap" data-act="new-budget" style="width:100%;background:none">Lege ein Budget an, z. B. für Lebensmittel.</button>'}
+    </section>
+
+    ${detail('Konten', cashAccounts().map(a => `<div class="kv"><span>${esc(a.name)}${a.bank_name ? ' · ' + esc(a.bank_name) : ''}</span>${eur(Number(a.balance_cents))}</div>`).join(''))}
+    ${detail('Einnahmen & Ausgaben (6 Monate)', `<div style="display:grid;grid-template-columns:repeat(${ms.length},minmax(0,1fr));gap:8px;align-items:end;height:110px" role="img" aria-label="${ms.map(m => `${m.label}: rein ${eurPlain(m.inc)}, raus ${eurPlain(m.out)}`).join('; ')}">${ms.map(m => `<div style="display:flex;gap:3px;align-items:end;justify-content:center;height:100%"><i style="display:block;width:9px;border-radius:3px 3px 0 0;background:var(--income);height:${Math.max(2, m.inc / mmax * 100)}%"></i><i style="display:block;width:9px;border-radius:3px 3px 0 0;background:var(--muted);height:${Math.max(2, m.out / mmax * 100)}%"></i></div>`).join('')}</div>
+      <div style="display:grid;grid-template-columns:repeat(${ms.length},minmax(0,1fr));gap:8px;font-size:12px;text-align:center;margin-top:6px" class="muted">${ms.map(m => `<span>${m.label}</span>`).join('')}</div>
+      <div style="display:flex;gap:16px;font-size:12px;margin-top:8px" class="muted"><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--income)"></i> rein</span><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--muted)"></i> raus</span></div>`)}
+    ${detail('Ausgaben nach Kategorie', tops.map(([id, v]) => rowBtn('cat-tx', `data-id="${id}"`, `<span class="stack" style="gap:6px;flex:1;margin-right:12px"><span style="font-size:14px">${esc((S.cats[id] || {}).name || 'Ohne Kategorie')}</span><span class="bar" style="height:6px"><i style="width:${v / tmax * 100}%;height:2px"></i></span></span>`, `<span style="font-size:14px">${eurPlain(v)}</span>`)).join('') || '<p class="muted" style="font-size:13px">Noch keine Ausgaben diesen Monat.</p>')}
+  </div>`;
 }
 
 /* ===== Sheets ===== */
@@ -876,9 +841,9 @@ function render() {
   else view = { home: vHome, tx: vTx, contracts: vContracts, budget: vBudget }[S.tab]();
   const tab = (k, l, i) => `<button data-act="tab" data-tab="${k}"${S.tab === k ? ' aria-current="page"' : ''}>${svg(i, 22)}${l}</button>`;
   el.innerHTML = view + (S.err ? `<p class="err" style="padding:0 20px" role="alert">${esc(S.err)}</p>` : '') +
-    `<nav class="nav" aria-label="Hauptnavigation">${tab('home', 'Übersicht', 'home')}${tab('tx', 'Umsätze', 'list')}${tab('contracts', 'Verträge', 'repeat')}${tab('budget', 'Budget', 'pie')}</nav>` +
+    `<nav class="nav" aria-label="Hauptnavigation">${tab('home', 'Übersicht', 'home')}${tab('tx', 'Umsätze', 'list')}${tab('contracts', 'Verträge', 'repeat')}${tab('budget', 'Geld', 'pie')}</nav>` +
     vSheet() + (S.toast ? `<div class="toast${render.toastEnter ? ' enter' : ''}" role="status">${esc(S.toast)}</div>` : '') +
-    `<div class="topbar" aria-hidden="true">${{ home: 'Übersicht', tx: 'Umsätze', contracts: 'Verträge', budget: 'Geld & Budget' }[S.tab]}</div><div class="ptr" aria-hidden="true"><span>${svg('repeat', 16)}</span></div>`;
+    `<div class="topbar" aria-hidden="true">${{ home: 'Übersicht', tx: 'Umsätze', contracts: 'Verträge', budget: 'Geld' }[S.tab]}</div><div class="ptr" aria-hidden="true"><span>${svg('repeat', 16)}</span></div>`;
   const nsc = el.querySelector('.scroll'); if (nsc && !render.resetScroll) nsc.scrollTop = top; render.resetScroll = false;
   const nss = el.querySelector('.sheet'); if (nss && !render.resetSheet) nss.scrollTop = stop; render.resetSheet = false;
   afterRender();
