@@ -45,6 +45,7 @@ h1{margin:0;font-weight:400;letter-spacing:-.01em;font-size:30px;line-height:36p
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg)}
 .row{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:58px;border-bottom:1px solid var(--border)}
 .row:last-child{border-bottom:0}
+.card .row.tap{padding:10px 0!important}
 .btn{height:44px;padding:0 16px;border-radius:var(--r-md);border:0;background:var(--border);font-size:14px;font-weight:500;transition:transform 120ms var(--ease),background 120ms}
 .btn:active{transform:scale(.97)}
 .btn.primary{background:var(--accent);color:var(--on-accent);font-weight:600}
@@ -103,6 +104,48 @@ h1{margin:0;font-weight:400;letter-spacing:-.01em;font-size:30px;line-height:36p
 .neg{color:var(--danger)}
 textarea{width:100%;min-height:72px;padding:12px 14px;border-radius:var(--r-md);border:1px solid var(--border-input);background:var(--surface);outline:none;resize:vertical}
 textarea:focus{border-color:var(--accent)}
+
+/* ===== Apple-Feinschliff ===== */
+:root{--ease-out:cubic-bezier(.23,1,.32,1);--ease-drawer:cubic-bezier(.32,.72,0,1)}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+h1{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,sans-serif;font-weight:700;font-size:32px;line-height:38px;letter-spacing:-.022em}
+.hero,.amt{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,sans-serif}
+.hero{letter-spacing:-.03em}
+.app{position:relative}
+.scroll{padding-bottom:calc(110px + var(--sab))}
+.nav{position:absolute;left:0;right:0;bottom:0;z-index:10;background:rgba(21,20,19,.72);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);border-top:.5px solid rgba(255,255,255,.08)}
+.nav button{transition:transform 120ms var(--ease-out),color 120ms ease}
+.nav button:active{transform:scale(.92)}
+.topbar{position:absolute;top:0;left:0;right:0;z-index:9;height:calc(44px + var(--sat));padding-top:var(--sat);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;letter-spacing:-.01em;background:rgba(12,11,10,.72);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);border-bottom:.5px solid rgba(255,255,255,.08);opacity:0;transform:translateY(-4px);transition:opacity 160ms ease,transform 160ms var(--ease-out);pointer-events:none}
+.topbar.show{opacity:1;transform:none}
+.row.tap,.tx.tap,.card.tap{transition:transform 140ms var(--ease-out),background-color 140ms ease}
+.row.tap:active,.tx.tap:active,.card.tap:active{transform:scale(.98)}
+.tx.tap:active,.card.tap:active{background-color:var(--surface-2)}
+.chip,.cat-btn,.seg button{transition:transform 120ms var(--ease-out),background-color 120ms ease,color 120ms ease,border-color 120ms ease}
+.chip:active,.cat-btn:active{transform:scale(.96)}
+/* Sheet */
+.sheet-bg{background:rgba(0,0,0,.55);transition:opacity 260ms ease}
+.sheet{will-change:transform;transition:transform 420ms var(--ease-drawer);touch-action:pan-y;padding-top:8px}
+.sheet .grab{align-self:center;width:36px;height:5px;border-radius:999px;background:rgba(255,255,255,.22);margin:2px 0 4px;flex-shrink:0}
+.sheet-bg.enter{opacity:0}.sheet-bg.enter .sheet{transform:translateY(100%)}
+.sheet-bg.leave{opacity:0;transition:opacity 200ms ease}.sheet-bg.leave .sheet{transform:translateY(100%);transition:transform 220ms var(--ease-out)}
+.sheet.dragging{transition:none}
+/* Toast */
+.toast{background:rgba(28,27,25,.86);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);border:.5px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,.45);transition:transform 360ms var(--ease-drawer),opacity 200ms ease}
+.toast.enter{transform:translateY(-140%);opacity:0}
+/* Pull to refresh */
+.ptr{position:absolute;left:0;right:0;top:calc(var(--sat) + 6px);display:flex;justify-content:center;z-index:8;pointer-events:none;opacity:0;transition:opacity 150ms ease}
+.ptr span{width:30px;height:30px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);color:var(--accent)}
+.scroll.pulling{transition:none}
+.scroll.release{transition:transform 360ms var(--ease-drawer)}
+@media (prefers-reduced-motion:reduce){
+  .sheet,.sheet-bg.leave .sheet,.toast,.scroll.release{transition:opacity 200ms ease!important}
+  .sheet-bg.enter .sheet,.sheet-bg.leave .sheet,.toast.enter{transform:none}
+  .row.tap:active,.tx.tap:active,.card.tap:active,.chip:active,.cat-btn:active,.nav button:active{transform:none}
+}
+@media (prefers-reduced-transparency:reduce){
+  .nav,.topbar,.toast{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}
+}
 </style>
 </head>
 <body>
@@ -250,7 +293,7 @@ const OWNER_NAME = 'Leon Marcellus Gaspar';
 
 const S = {
   user: null, tab: 'home', loading: true, err: null,
-  accounts: [], tx: [], cats: {}, catList: [], rules: [], conns: [], contracts: [], budgets: [],
+  accounts: [], tx: [], cats: {}, catList: [], rules: [], conns: [], contracts: [], budgets: [], positions: [],
   filter: 'all', q: '', catFilter: null, discreet: false, sheet: null, toast: null, syncing: false, lastAuto: 0, period: 'month'
 };
 try { S.discreet = localStorage.getItem('fin_discreet') === '1'; } catch (e) {}
@@ -290,7 +333,7 @@ const ICON = {
   chev: '<path d="M9 6l6 6-6 6"/>', clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
 };
 const svg = (k, s = 20, w = 1.5) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
-function toast(msg) { S.toast = msg; render(); clearTimeout(toast.t); toast.t = setTimeout(() => { S.toast = null; render(); }, 3800); }
+function toast(msg) { const fresh = !S.toast; S.toast = msg; render.toastEnter = fresh; render(); clearTimeout(toast.t); toast.t = setTimeout(() => { const t = $('.toast'); if (t) { t.classList.add('enter'); setTimeout(() => { S.toast = null; render(); }, 280); } else { S.toast = null; render(); } }, 3800); }
 const closeBtn = `<button class="icon-btn" data-act="close" aria-label="Schließen">${svg('close', 16)}</button>`;
 const sheetHead = t => `<div style="display:flex;justify-content:space-between;align-items:center"><span class="over" style="color:var(--accent)">${t}</span>${closeBtn}</div>`;
 const rowBtn = (act, attrs, left, right) => `<button class="row tap" data-act="${act}" ${attrs} style="width:100%;background:none;border-left:0;border-right:0;border-top:0;padding:0;text-align:left;color:var(--text)">${left}${right}</button>`;
@@ -298,19 +341,20 @@ const rowBtn = (act, attrs, left, right) => `<button class="row tap" data-act="$
 /* ===== Daten ===== */
 async function load() {
   S.loading = true; render();
-  const [a, c, r, t, k, ct, b] = await Promise.all([
+  const [a, c, r, t, k, ct, b, ps] = await Promise.all([
     sb.from('fin_accounts').select('*').eq('archived', false).order('created_at'),
     sb.from('fin_categories').select('*').order('name'),
     sb.from('fin_category_rules').select('*').order('priority'),
     sb.from('fin_transactions').select('id,account_id,booked_on,amount_cents,counterparty,purpose,category_id,category_source,contract_id,parent_id,status,is_split_parent,note').order('booked_on', { ascending: false }).order('created_at', { ascending: false }).limit(4000),
     sb.from('fin_bank_connections').select('id,aspsp_name,status,consent_valid_until,last_error,updated_at').in('status', ['active', 'expired', 'error']).order('created_at', { ascending: false }),
     sb.from('fin_contracts').select('*').order('next_due_on'),
-    sb.from('fin_budgets').select('*')
+    sb.from('fin_budgets').select('*'),
+    sb.from('fin_positions').select('*').order('value_cents', { ascending: false })
   ]);
-  const e = [a, c, r, t, k, ct, b].map(x => x.error).find(Boolean);
+  const e = [a, c, r, t, k, ct, b, ps].map(x => x.error).find(Boolean);
   S.err = e ? e.message : null;
   S.accounts = a.data || []; S.catList = c.data || []; S.rules = r.data || []; S.tx = t.data || [];
-  S.conns = k.data || []; S.contracts = ct.data || []; S.budgets = b.data || [];
+  S.conns = k.data || []; S.contracts = ct.data || []; S.budgets = b.data || []; S.positions = ps.data || [];
   S.cats = Object.fromEntries(S.catList.map(x => [x.id, x]));
   S.loading = false; render();
 }
@@ -392,6 +436,28 @@ function monthStats(n = 6) {
     out.push({ label: new Date(f + 'T12:00:00').toLocaleDateString('de-DE', { month: 'short' }), inc: xs.filter(t => t.amount_cents > 0).reduce((s, t) => s + Number(t.amount_cents), 0), out: -xs.filter(t => t.amount_cents < 0).reduce((s, t) => s + Number(t.amount_cents), 0) });
   }
   return out;
+}
+
+function contractStatus(c) {
+  const [mf, me] = monthRange(0), t = TODAY();
+  const paid = S.tx.filter(x => x.contract_id === c.id && x.booked_on >= mf && x.booked_on <= me && !x.is_split_parent).sort((a, b) => a.booked_on < b.booked_on ? 1 : -1);
+  const due = occurrences(c, t, me).filter(d => !paid.some(p => Math.abs(daysBetween(p.booked_on, d)) <= 3));
+  return { paid, dueThisMonth: due, paidSum: paid.reduce((s, x) => s + Number(x.amount_cents), 0), openSum: due.length * Number(c.amount_cents) };
+}
+function cashAccounts() { return S.accounts.filter(a => ['giro', 'tagesgeld', 'bargeld', 'virtual'].includes(a.type)); }
+function wealth() {
+  const cash = cashAccounts().reduce((s, a) => s + Number(a.balance_cents), 0);
+  const inv = S.positions.reduce((s, p) => s + Number(p.invested_cents), 0);
+  const val = S.positions.reduce((s, p) => s + Number(p.value_cents), 0);
+  return { cash, inv, val, total: cash + val };
+}
+function outlook() {
+  const ms = []; for (let i = 3; i >= 1; i--) { const [f, e] = monthRange(-i); const xs = leaves().filter(t => t.booked_on >= f && t.booked_on <= e && !isTransfer(t) && t.status === 'booked'); ms.push({ label: new Date(f + 'T12:00:00').toLocaleDateString('de-DE', { month: 'short' }), net: xs.reduce((s, t) => s + Number(t.amount_cents), 0) }); }
+  const avg = Math.round(ms.reduce((s, m) => s + m.net, 0) / ms.length);
+  const cash = wealth().cash;
+  const at = n => cash + avg * n;
+  const months = avg < 0 ? Math.floor(cash / -avg * 10) / 10 : null;
+  return { ms, avg, cash, at, months };
 }
 
 /* ===== Ansichten ===== */
@@ -502,10 +568,16 @@ function vContracts() {
   const sug = S.contracts.filter(c => c.status === 'suggested');
   const gone = S.contracts.filter(c => c.status === 'cancel_sent' || c.status === 'cancelled');
   const perMonth = act.reduce((s, c) => s + Number(c.amount_cents) * PER_MONTH[c.interval], 0);
+  const st = Object.fromEntries(act.map(c => [c.id, contractStatus(c)]));
+  const paidSum = act.reduce((s, c) => s + st[c.id].paidSum, 0), openSum = act.reduce((s, c) => s + st[c.id].openSum, 0);
+  const paidPct = paidSum + openSum ? Math.round(paidSum / (paidSum + openSum) * 100) : 0;
   const item = c => {
     const cb = cancelBy(c);
+    const cs = st[c.id];
+    const stat = !cs ? '' : cs.paid.length ? `<span class="pill ok" style="margin-top:4px">✓ abgebucht ${fmtDate(cs.paid[0].booked_on)}${cs.dueThisMonth.length ? ' · noch ' + cs.dueThisMonth.length + '×' : ''}</span>`
+      : cs.dueThisMonth.length ? `<span class="pill" style="margin-top:4px;border-color:rgba(200,176,122,.45);color:var(--accent)">kommt am ${fmtDate(cs.dueThisMonth[0])}</span>` : `<span class="pill" style="margin-top:4px">diesen Monat nicht fällig</span>`;
     const warn = cb && daysBetween(TODAY(), cb) <= 30 && daysBetween(TODAY(), cb) >= 0;
-    return rowBtn('contract', `data-id="${c.id}"`, `<span class="stack" style="gap:2px"><span style="font-size:15px;font-weight:500">${esc(c.provider)}</span><span style="font-size:12px;color:${warn ? 'var(--danger)' : 'var(--muted)'}">${warn ? `Kündigen bis ${fmtDate(cb)} · noch ${daysBetween(TODAY(), cb)} Tage` : (c.status === 'cancel_sent' ? 'Kündigung verschickt' : c.status === 'cancelled' ? 'gekündigt' : `${INTERVAL[c.interval]} · fällig ${fmtDate(c.next_due_on)}`)}</span></span>`,
+    return rowBtn('contract', `data-id="${c.id}"`, `<span class="stack" style="gap:2px"><span style="font-size:15px;font-weight:500">${esc(c.provider)}</span><span style="font-size:12px;color:${warn ? 'var(--danger)' : 'var(--muted)'}">${warn ? `Kündigen bis ${fmtDate(cb)} · noch ${daysBetween(TODAY(), cb)} Tage` : (c.status === 'cancel_sent' ? 'Kündigung verschickt' : c.status === 'cancelled' ? 'gekündigt' : `${INTERVAL[c.interval]} · nächste ${fmtDate(c.next_due_on)}`)}</span>${stat}</span>`,
       `<span style="text-align:right">${eur(Number(c.amount_cents))}<span class="muted" style="display:block;font-size:12px">${INTERVAL[c.interval]}</span></span>`);
   };
   const byIv = {};
@@ -515,6 +587,13 @@ function vContracts() {
       <div class="stack" style="gap:4px"><h1>Verträge</h1><span class="muted" style="font-size:13px">${act.length} aktiv · ≈ ${eurPlain(-perMonth)} pro Monat</span></div>
       <button class="icon-btn gold" data-act="new-contract" aria-label="Vertrag hinzufügen">${svg('plus', 18, 2)}</button>
     </header>
+    ${act.length ? `<section class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="muted" style="font-size:14px">Fixkosten pro Monat</span><span class="muted" style="font-size:12px">${eurPlain(-perMonth * 12)} im Jahr</span></div>
+      <span style="font-size:34px">${eur(-perMonth)}</span>
+      <div class="bar"><i style="width:${paidPct}%"></i></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span><span class="pos">✓</span> ${new Date().toLocaleDateString('de-DE', { month: 'long' })} abgebucht: ${eurPlain(-paidSum)}</span><span style="color:var(--accent)">kommt noch: ${eurPlain(-openSum)}</span></div>
+      <span class="muted" style="font-size:12px">${act.length} Verträge · Durchschnittswerte, Turnus auf Monat umgerechnet</span>
+    </section>` : ''}
     ${sug.map(c => `<section class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px;border-color:rgba(200,176,122,.45)">
       <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="over" style="color:var(--accent)">Neu erkannt</span><span class="muted" style="font-size:12px">${INTERVAL[c.interval]}</span></div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><span style="font-size:16px;font-weight:500">${esc(c.provider)}</span>${eur(Number(c.amount_cents))}</div>
@@ -550,7 +629,7 @@ function vBudget() {
   for (const t of leaves().filter(t => t.booked_on >= mf && t.amount_cents < 0 && !isTransfer(t))) catTot[t.category_id || ''] = (catTot[t.category_id || ''] || 0) - Number(t.amount_cents);
   const tops = Object.entries(catTot).sort((a, b) => b[1] - a[1]).slice(0, 7); const tmax = Math.max(1, ...tops.map(x => x[1]));
   return `<div class="scroll stack" style="gap:20px">
-    <header class="stack" style="gap:4px"><h1>Budget</h1><span class="muted" style="font-size:13px">Frei verfügbar ${f.label}</span></header>
+    <header class="stack" style="gap:4px"><h1>Geld & Budget</h1><span class="muted" style="font-size:13px">Frei verfügbar ${f.label}</span></header>
     <section class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px">
       <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="muted" style="font-size:14px">Frei verfügbar</span><span class="muted" style="font-size:12px">≈ ${eurPlain(f.perDay)} / Tag · ${f.days} Tage</span></div>
       <span style="font-size:36px;color:${f.free < 0 ? 'var(--danger)' : 'var(--accent)'}">${eur(f.free)}</span>
@@ -564,6 +643,7 @@ function vBudget() {
       <div style="display:flex;justify-content:space-between;font-size:12px" class="muted"><span>heute</span><span>tiefster Stand ${eurPlain(fc.min)}</span><span>${fmtDate(fc.end)}</span></div>
       <span class="muted" style="font-size:12px">Nur bekannte Verträge und Einnahmen – spontane Ausgaben sind nicht eingerechnet.</span>
     </section>
+    ${vWealth()}
     <section class="stack" style="gap:10px">
       <div style="display:flex;justify-content:space-between;align-items:center"><span class="over">Budgets · ${new Date().toLocaleDateString('de-DE', { month: 'long' })}</span><button class="btn" data-act="new-budget" style="height:36px">+ Budget</button></div>
       ${budgets.map(({ b, c, sp, pct }) => `<button class="card tap" data-act="budget" data-id="${b.id}" style="padding:14px;display:flex;flex-direction:column;gap:8px;text-align:left;color:var(--text)">
@@ -586,6 +666,48 @@ function vBudget() {
   </div>`;
 }
 
+function vWealth() {
+  const w = wealth(), o = outlook();
+  const gain = w.val - w.inv, gainPct = w.inv ? Math.round(gain / w.inv * 1000) / 10 : 0;
+  const pos = S.positions.map(p => { const g = Number(p.value_cents) - Number(p.invested_cents); return rowBtn('position', `data-id="${p.id}"`,
+    `<span class="stack" style="gap:2px"><span style="font-size:15px">${esc(p.name)}</span><span class="muted" style="font-size:12px">investiert ${eurPlain(p.invested_cents)} · Stand ${fmtDate(p.value_updated_at)}</span></span>`,
+    `<span style="text-align:right">${eur(Number(p.value_cents))}<span style="display:block;font-size:12px" class="${g > 0 ? 'pos' : g < 0 ? 'neg' : 'muted'}">${g ? (g > 0 ? '+ ' : '−') + eurPlain(Math.abs(g)) : '±0'}</span></span>`); }).join('');
+  const W = 326, H = 80; const pts = [0, 1, 2, 3, 4, 5, 6].map(n => o.at(n)); const mx = Math.max(...pts, 0), mn = Math.min(...pts, 0);
+  const y = v => 6 + (H - 12) * (1 - (v - mn) / ((mx - mn) || 1));
+  const line = pts.map((v, i) => `${Math.round(i / 6 * W)},${Math.round(y(v))}`).join(' ');
+  return `<section class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px">
+      <span class="muted" style="font-size:14px">Gesamtvermögen</span>
+      <span style="font-size:36px">${eur(w.total)}</span>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+        <div class="card" style="padding:12px;background:var(--bg)"><span class="muted" style="font-size:12px">Cash</span><div style="font-size:20px">${eur(w.cash)}</div></div>
+        <div class="card" style="padding:12px;background:var(--bg)"><span class="muted" style="font-size:12px">Depot & Krypto</span><div style="font-size:20px">${eur(w.val)}</div></div>
+      </div>
+      <div class="stack">${cashAccounts().map(a => `<div class="kv"><span>${esc(a.name)}${a.bank_name ? ' · ' + esc(a.bank_name) : ''}</span>${eur(Number(a.balance_cents))}</div>`).join('')}</div>
+    </section>
+    <section class="card" style="padding:4px 16px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0 4px"><span class="over">Depot</span><button class="btn" data-act="new-position" style="height:36px">+ Position</button></div>
+      <div class="kv"><span>Investiert</span><span>${eurPlain(w.inv)}</span></div>
+      <div class="kv"><span>Aktueller Wert</span><span>${eurPlain(w.val)}</span></div>
+      <div class="kv"><span>Gewinn / Verlust</span><span class="${gain > 0 ? 'pos' : gain < 0 ? 'neg' : ''}">${gain >= 0 ? '+ ' : '−'}${eurPlain(Math.abs(gain))} (${gainPct >= 0 ? '+' : ''}${String(gainPct).replace('.', ',')} %)</span></div>
+      <span class="over" style="display:block;padding:14px 0 2px;font-size:11px">Positionen</span>
+      ${pos || '<p class="muted" style="font-size:13px">Noch keine Positionen.</p>'}
+      <p class="muted" style="font-size:12px;line-height:17px;margin:10px 0 0">Depotwerte trägst du von Hand ein – die Bankschnittstelle (PSD2) liefert keine Wertpapiere. Antippen zum Aktualisieren.</p>
+    </section>
+    <section class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px">
+      <span style="font-size:14px;font-weight:500">Wenn du so weitermachst</span>
+      <span class="muted" style="font-size:13px;line-height:18px">Ø ${o.avg >= 0 ? '+' : '−'} ${eurPlain(Math.abs(o.avg))} pro Monat (Einnahmen minus Ausgaben, ${o.ms.map(m => m.label).join(', ')}, ohne Umbuchungen)</span>
+      <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Cash heute ${eurPlain(o.cash)}, in 6 Monaten ${eurPlain(o.at(6))}">
+        ${mn < 0 ? `<line x1="0" y1="${y(0)}" x2="${W}" y2="${y(0)}" stroke="var(--danger)" stroke-dasharray="3 4" stroke-width="1"/>` : ''}
+        <polyline points="${line}" fill="none" stroke="${o.avg < 0 ? 'var(--danger)' : 'var(--income)'}" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>
+      <div class="kv"><span>Cash heute</span>${eur(o.cash)}</div>
+      <div class="kv"><span>in 1 Monat</span>${eur(o.at(1))}</div>
+      <div class="kv"><span>in 3 Monaten</span>${eur(o.at(3))}</div>
+      <div class="kv"><span>in 6 Monaten</span><b style="font-weight:500" class="${o.at(6) < 0 ? 'neg' : ''}">${eur(o.at(6))}</b></div>
+      ${o.months !== null ? `<span style="font-size:13px;color:${o.months < 6 ? 'var(--danger)' : 'var(--muted)'}">Bei diesem Tempo reicht dein Cash noch etwa ${String(o.months).replace('.', ',')} Monate.</span>` : '<span class="pos" style="font-size:13px">Du gibst im Schnitt weniger aus, als reinkommt.</span>'}
+      <span class="muted" style="font-size:12px;line-height:17px">Einfache Hochrechnung. Einmalige Eingänge (z. B. Stipendium) und Käufe über Trade Republic (die Bank liefert keine Details) verzerren den Schnitt.</span>
+    </section>`;
+}
+
 /* ===== Sheets ===== */
 function catGrid(sel, act, extra = '') {
   const kinds = [['expense', 'Ausgaben'], ['income', 'Einnahmen'], ['transfer', 'Umbuchungen']];
@@ -593,7 +715,7 @@ function catGrid(sel, act, extra = '') {
 }
 function vSheet() {
   const sh = S.sheet; if (!sh) return '';
-  const wrap = (label, inner, isForm = false, id = '') => `<div class="sheet-bg" data-act="close-bg"><${isForm ? 'form' : 'div'} class="sheet"${id ? ` id="${id}"` : ''} role="dialog" aria-label="${label}">${inner}</${isForm ? 'form' : 'div'}></div>`;
+  const wrap = (label, inner, isForm = false, id = '') => `<div class="sheet-bg${render.sheetEnter ? ' enter' : ''}" data-act="close-bg"><${isForm ? 'form' : 'div'} class="sheet"${id ? ` id="${id}"` : ''} role="dialog" aria-modal="true" aria-label="${label}"><span class="grab" aria-hidden="true"></span>${inner}</${isForm ? 'form' : 'div'}></div>`;
   if (sh.kind === 'add') {
     const opt = (act, t, d) => rowBtn(act, '', `<span class="stack" style="gap:2px"><span style="font-size:16px">${t}</span><span class="muted" style="font-size:12px">${d}</span></span>`, `<span style="color:var(--accent)">${svg('plus', 18)}</span>`);
     return wrap('Konto hinzufügen', sheetHead('Konto hinzufügen') + `<div class="stack">${opt('bank', 'Bank verbinden', 'Automatisch, nur lesend')}${opt('new-account', 'Bargeld oder manuelles Konto', 'Buchungen selbst erfassen')}${S.accounts.length ? opt('import', 'CSV importieren', 'Für Banken ohne Anbindung') : ''}</div>`);
@@ -716,6 +838,20 @@ function vSheet() {
       <a class="btn primary block" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="mailto:${encodeURIComponent(c.cancel_email || '')}?subject=${encodeURIComponent('Kündigung ' + c.provider + (c.customer_number ? ' – Kundennr. ' + c.customer_number : ''))}&body=${encodeURIComponent(sh.letter)}" data-act="c-sent" data-id="${c.id}">In Mail-App öffnen</a>
       <button class="btn block" data-act="copy-letter">Text kopieren</button>`);
   }
+  if (sh.kind === 'position') {
+    const p = sh.id ? S.positions.find(x => x.id === sh.id) : { name: '', kind: 'aktie', broker: 'Trade Republic', invested_cents: 0, value_cents: 0 };
+    const v = c => c ? (Number(c) / 100).toFixed(2).replace('.', ',') : '';
+    return wrap('Position', sheetHead(sh.id ? 'Position' : 'Neue Position') + `
+      <label class="field">Name<input name="name" required autocomplete="off" value="${esc(p.name)}" placeholder="z. B. MSCI World"></label>
+      <div style="display:flex;gap:10px"><label class="field" style="flex:1">Art<select name="kind">${[['aktie', 'Aktie'], ['etf', 'ETF'], ['krypto', 'Krypto'], ['fonds', 'Fonds'], ['sonstiges', 'Sonstiges']].map(([k, l]) => `<option value="${k}"${p.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="field" style="flex:1">Wo<input name="broker" autocomplete="off" value="${esc(p.broker || '')}"></label></div>
+      <div style="display:flex;gap:10px"><label class="field" style="flex:1">Investiert in €<input name="inv" inputmode="decimal" value="${v(p.invested_cents)}" placeholder="0,00"></label>
+      <label class="field" style="flex:1">Wert heute in €<input name="val" inputmode="decimal" value="${v(p.value_cents)}" placeholder="0,00"></label></div>
+      <span class="muted" style="font-size:12px">Den aktuellen Wert siehst du in der Trade-Republic-App.</span>
+      ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}
+      <button class="btn primary block" type="submit">Speichern</button>
+      ${sh.id ? `<button type="button" class="btn block" data-act="p-del" data-id="${p.id}" style="background:transparent;color:var(--danger);font-weight:400">Position löschen</button>` : ''}`, true, 'p-form');
+  }
   if (sh.kind === 'budget') {
     const b = sh.id ? S.budgets.find(x => x.id === sh.id) : null;
     return wrap('Budget', sheetHead(b ? 'Budget ändern' : 'Neues Budget') + `
@@ -741,12 +877,60 @@ function render() {
   const tab = (k, l, i) => `<button data-act="tab" data-tab="${k}"${S.tab === k ? ' aria-current="page"' : ''}>${svg(i, 22)}${l}</button>`;
   el.innerHTML = view + (S.err ? `<p class="err" style="padding:0 20px" role="alert">${esc(S.err)}</p>` : '') +
     `<nav class="nav" aria-label="Hauptnavigation">${tab('home', 'Übersicht', 'home')}${tab('tx', 'Umsätze', 'list')}${tab('contracts', 'Verträge', 'repeat')}${tab('budget', 'Budget', 'pie')}</nav>` +
-    vSheet() + (S.toast ? `<div class="toast" role="status">${esc(S.toast)}</div>` : '');
+    vSheet() + (S.toast ? `<div class="toast${render.toastEnter ? ' enter' : ''}" role="status">${esc(S.toast)}</div>` : '') +
+    `<div class="topbar" aria-hidden="true">${{ home: 'Übersicht', tx: 'Umsätze', contracts: 'Verträge', budget: 'Geld & Budget' }[S.tab]}</div><div class="ptr" aria-hidden="true"><span>${svg('repeat', 16)}</span></div>`;
   const nsc = el.querySelector('.scroll'); if (nsc && !render.resetScroll) nsc.scrollTop = top; render.resetScroll = false;
   const nss = el.querySelector('.sheet'); if (nss && !render.resetSheet) nss.scrollTop = stop; render.resetSheet = false;
+  afterRender();
   if (fid && (fid === 'q' || fid === 'bq')) { const q = document.getElementById(fid); if (q) { q.focus(); if (pos != null) q.setSelectionRange(pos, pos); } }
 }
-const openSheet = s => { S.sheet = s; render.resetSheet = true; render(); };
+const openSheet = s => { const was = !!S.sheet; S.sheet = s; render.resetSheet = true; render.sheetEnter = !was; render(); };
+function closeSheet(after) {
+  const bg = $('.sheet-bg');
+  if (!bg || window.matchMedia('(prefers-reduced-motion: reduce)').matches && false) { S.sheet = null; render(); after && after(); return; }
+  bg.classList.add('leave');
+  setTimeout(() => { S.sheet = null; render(); after && after(); }, 210);
+}
+function afterRender() {
+  // Einblenden: Startzustand -> nächster Frame -> Endzustand (CSS-Transition, unterbrechbar)
+  if (render.sheetEnter) { render.sheetEnter = false; const bg = $('.sheet-bg'); if (bg) requestAnimationFrame(() => requestAnimationFrame(() => bg.classList.remove('enter'))); }
+  if (render.toastEnter) { render.toastEnter = false; const t = $('.toast'); if (t) requestAnimationFrame(() => requestAnimationFrame(() => t.classList.remove('enter'))); }
+  const sc = $('.scroll'), tb = $('.topbar');
+  if (sc && tb) { const upd = () => tb.classList.toggle('show', sc.scrollTop > 44); upd(); sc.onscroll = upd; }
+  setupSheetDrag(); setupPullToRefresh();
+}
+function setupSheetDrag() {
+  const sheet = $('.sheet'); if (!sheet || sheet.dataset.drag) return; sheet.dataset.drag = '1';
+  let y0 = null, dy = 0, t0 = 0, hist = [];
+  sheet.addEventListener('touchstart', e => { if (sheet.scrollTop > 0 || e.touches.length > 1 || e.target.closest('input,textarea,select')) { y0 = null; return; } y0 = e.touches[0].clientY; t0 = Date.now(); dy = 0; hist = [[y0, t0]]; }, { passive: true });
+  sheet.addEventListener('touchmove', e => {
+    if (y0 === null) return; const y = e.touches[0].clientY; dy = y - y0;
+    if (dy < 0) dy = -(Math.abs(dy) * 40) / (40 + Math.abs(dy)); // Gummiband nach oben
+    if (Math.abs(dy) > 6) { sheet.classList.add('dragging'); sheet.style.transform = `translateY(${dy}px)`; }
+    hist.push([y, Date.now()]); if (hist.length > 5) hist.shift();
+  }, { passive: true });
+  sheet.addEventListener('touchend', () => {
+    if (y0 === null) return; sheet.classList.remove('dragging');
+    const [a, b] = [hist[0], hist[hist.length - 1]]; const v = (b[0] - a[0]) / Math.max(1, b[1] - a[1]); // px/ms
+    if (dy > 120 || (dy > 20 && v > 0.5)) { sheet.style.transform = ''; closeSheet(); } else sheet.style.transform = '';
+    y0 = null;
+  });
+}
+function setupPullToRefresh() {
+  const sc = $('.scroll'), ptr = $('.ptr'); if (!sc || sc.dataset.ptr || !S.user) return; sc.dataset.ptr = '1';
+  let y0 = null, dy = 0;
+  sc.addEventListener('touchstart', e => { y0 = sc.scrollTop <= 0 && !S.sheet ? e.touches[0].clientY : null; dy = 0; }, { passive: true });
+  sc.addEventListener('touchmove', e => {
+    if (y0 === null) return; const raw = e.touches[0].clientY - y0; if (raw <= 0) { dy = 0; return; }
+    dy = (raw * 300 * 0.55) / (300 + 0.55 * raw); // Gummiband
+    sc.classList.add('pulling'); sc.style.transform = `translateY(${dy}px)`; ptr.style.opacity = Math.min(1, dy / 70); ptr.firstChild.style.transform = `rotate(${dy * 4}deg)`;
+  }, { passive: true });
+  sc.addEventListener('touchend', () => {
+    if (y0 === null) return; y0 = null; sc.classList.remove('pulling'); sc.classList.add('release'); sc.style.transform = ''; ptr.style.opacity = 0;
+    setTimeout(() => sc.classList.remove('release'), 380);
+    if (dy > 70) { S.conns.some(c => c.status === 'active') ? syncNow() : load(); }
+  });
+}
 const parseEuro = s => { s = (s || '').trim(); if (!s) return null; return Parser.parseAmount(s); };
 
 /* ===== Aktionen ===== */
@@ -781,7 +965,7 @@ document.addEventListener('click', async e => {
       case 'sync': syncNow(); break;
       case 'import': case 'open-account': openSheet({ kind: 'import', acc: id || (S.accounts.find(a => a.source !== 'psd2') || S.accounts[0] || {}).id }); break;
       case 'logout': await sb.auth.signOut(); Object.assign(S, { accounts: [], tx: [], conns: [], contracts: [], budgets: [], sheet: null }); render(); break;
-      case 'close': case 'close-bg': { const reload = S.sheet && S.sheet.result; S.sheet = null; render(); if (reload) load(); break; }
+      case 'close': case 'close-bg': { const reload = S.sheet && S.sheet.result; closeSheet(reload ? load : null); break; }
       case 'tx': openSheet({ kind: 'tx', id }); break;
       case 'set-cat': {
         const t = S.tx.find(x => x.id === S.sheet.id); const cat = b.dataset.cat;
@@ -823,6 +1007,9 @@ document.addEventListener('click', async e => {
       case 'copy-letter': try { await navigator.clipboard.writeText(document.getElementById('letter').value); toast('Kopiert'); } catch (x) { toast('Kopieren nicht möglich – Text markieren und kopieren'); } break;
       case 'detect': { const n = await rpc('fin_detect_contracts', {}); toast(n ? `${n} neue Verträge erkannt` : 'Keine neuen Verträge'); await load(); break; }
       case 'new-budget': openSheet({ kind: 'budget' }); break;
+      case 'new-position': openSheet({ kind: 'position' }); break;
+      case 'position': openSheet({ kind: 'position', id }); break;
+      case 'p-del': if (window.confirm('Position löschen?')) { await sb.from('fin_positions').delete().eq('id', id); S.sheet = null; toast('Gelöscht'); await load(); } break;
       case 'budget': openSheet({ kind: 'budget', id }); break;
       case 'b-cat': keepForm('#b-form', ['amt']); S.sheet.cat = b.dataset.cat; render(); break;
       case 'b-del': await sb.from('fin_budgets').delete().eq('id', id); S.sheet = null; toast('Budget gelöscht'); await load(); break;
@@ -889,6 +1076,11 @@ document.addEventListener('submit', async e => {
       if (sh.kind === 'new-contract') { row.status = 'active'; row.counterparty_pattern = null; const { error } = await sb.from('fin_contracts').insert(row); if (error) throw error; }
       else { const c = S.contracts.find(x => x.id === sh.id); if (c.status === 'suggested') row.status = 'active'; const { error } = await sb.from('fin_contracts').update(row).eq('id', sh.id); if (error) throw error; }
       S.sheet = null; toast('Gespeichert'); await load();
+    } else if (f.id === 'p-form') {
+      const inv = parseEuro(d.get('inv')) || 0, val = parseEuro(d.get('val')) || 0;
+      const row = { name: d.get('name').trim(), kind: d.get('kind'), broker: (d.get('broker') || '').trim() || null, invested_cents: Math.abs(inv), value_cents: Math.abs(val), value_updated_at: TODAY() };
+      const { error } = sh.id ? await sb.from('fin_positions').update(row).eq('id', sh.id) : await sb.from('fin_positions').insert(row);
+      if (error) throw error; S.sheet = null; toast('Gespeichert'); await load();
     } else if (f.id === 'b-form') {
       const amt = parseEuro(d.get('amt')); const cat = sh.cat || (sh.id && S.budgets.find(x => x.id === sh.id).category_id);
       if (!amt || !cat) { sh.amt = d.get('amt'); sh.err = 'Betrag und Kategorie wählen.'; render(); return; }
