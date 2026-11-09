@@ -106,6 +106,11 @@ textarea{width:100%;min-height:72px;padding:12px 14px;border-radius:var(--r-md);
 textarea:focus{border-color:var(--accent)}
 
 /* ===== Apple-Feinschliff ===== */
+.refresh-fab{position:absolute;z-index:11;top:calc(var(--sat) + 4px);right:12px;width:36px;height:36px;border-radius:999px;border:.5px solid rgba(255,255,255,.12);background:rgba(28,27,25,.72);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);color:var(--accent);display:flex;align-items:center;justify-content:center;padding:0;transition:transform 120ms var(--ease-out)}
+.refresh-fab:active{transform:scale(.9)}
+.refresh-fab::after{content:"";position:absolute;inset:-4px}
+.refresh-fab.busy{color:var(--muted)}
+.scroll>header{padding-right:44px}
 .fold{padding:0 16px}
 .fold summary{list-style:none;display:flex;justify-content:space-between;align-items:center;min-height:52px;font-size:15px;cursor:pointer;-webkit-user-select:none;user-select:none}
 .fold summary::-webkit-details-marker{display:none}
@@ -299,7 +304,7 @@ const OWNER_NAME = 'Leon Marcellus Gaspar';
 
 const S = {
   user: null, tab: 'home', loading: true, err: null,
-  accounts: [], tx: [], cats: {}, catList: [], rules: [], conns: [], contracts: [], budgets: [], positions: [],
+  accounts: [], tx: [], cats: {}, catList: [], rules: [], conns: [], contracts: [], budgets: [], positions: [], plans: [],
   filter: 'all', q: '', catFilter: null, discreet: false, sheet: null, toast: null, syncing: false, lastAuto: 0, period: 'month'
 };
 try { S.discreet = localStorage.getItem('fin_discreet') === '1'; } catch (e) {}
@@ -347,7 +352,7 @@ const rowBtn = (act, attrs, left, right) => `<button class="row tap" data-act="$
 /* ===== Daten ===== */
 async function load() {
   S.loading = true; render();
-  const [a, c, r, t, k, ct, b, ps] = await Promise.all([
+  const [a, c, r, t, k, ct, b, ps, pl] = await Promise.all([
     sb.from('fin_accounts').select('*').eq('archived', false).order('created_at'),
     sb.from('fin_categories').select('*').order('name'),
     sb.from('fin_category_rules').select('*').order('priority'),
@@ -355,12 +360,13 @@ async function load() {
     sb.from('fin_bank_connections').select('id,aspsp_name,status,consent_valid_until,last_error,updated_at').in('status', ['active', 'expired', 'error']).order('created_at', { ascending: false }),
     sb.from('fin_contracts').select('*').order('next_due_on'),
     sb.from('fin_budgets').select('*'),
-    sb.from('fin_positions').select('*').order('value_cents', { ascending: false })
+    sb.from('fin_positions').select('*').order('value_cents', { ascending: false }),
+    sb.from('fin_plans').select('*').eq('active', true).order('created_at', { ascending: false })
   ]);
-  const e = [a, c, r, t, k, ct, b, ps].map(x => x.error).find(Boolean);
+  const e = [a, c, r, t, k, ct, b, ps, pl].map(x => x.error).find(Boolean);
   S.err = e ? e.message : null;
   S.accounts = a.data || []; S.catList = c.data || []; S.rules = r.data || []; S.tx = t.data || [];
-  S.conns = k.data || []; S.contracts = ct.data || []; S.budgets = b.data || []; S.positions = ps.data || [];
+  S.conns = k.data || []; S.contracts = ct.data || []; S.budgets = b.data || []; S.positions = ps.data || []; S.plans = pl.data || [];
   S.cats = Object.fromEntries(S.catList.map(x => [x.id, x]));
   S.loading = false; render();
 }
@@ -373,13 +379,14 @@ async function fn(body) {
 }
 async function syncNow(silent = false) {
   if (S.syncing) return;
+  if (!S.conns.some(c => c.status === 'active')) { await load(); if (!silent) toast('Aktualisiert'); return; }
   S.syncing = true; S.lastAuto = Date.now(); render();
   try {
     const d = await fn({ action: 'sync' });
     const n = (d.synced || []).reduce((s, x) => s + x.inserted, 0);
     const errs = (d.synced || []).flatMap(x => x.errors || []);
     if (errs.length) toast('Teilweise aktualisiert: ' + errs[0]);
-    else if (!silent || n) toast(n ? `${n} neue Buchung${n === 1 ? '' : 'en'}` : 'Alles aktuell');
+    else if (!silent || n) toast(n ? `${n} neue Buchung${n === 1 ? '' : 'en'} · ${new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : `Alles aktuell · ${new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`);
   } catch (e) { if (!silent) toast('Abruf fehlgeschlagen: ' + e.message); }
   S.syncing = false; await load();
 }
@@ -494,7 +501,6 @@ function vHome() {
     <header style="display:flex;justify-content:space-between;align-items:center">
       <div class="stack" style="gap:4px"><span class="over">Gesamtsaldo</span><span class="muted" style="font-size:14px">${new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}</span></div>
       <span style="display:flex;gap:8px">
-        ${S.conns.some(c => c.status === 'active') ? `<button class="icon-btn" data-act="sync" aria-label="Konten abrufen"${S.syncing ? ' disabled' : ''}><span class="${S.syncing ? 'spin' : ''}" style="display:flex">${svg('repeat', 18)}</span></button>` : ''}
         <button class="icon-btn" data-act="discreet" aria-label="${S.discreet ? 'Beträge zeigen' : 'Beträge verbergen'}">${svg(S.discreet ? 'eyeoff' : 'eye', 18)}</button>
       </span>
     </header>
@@ -621,6 +627,53 @@ function cancelBy(c) {
   return end ? addDays(end, -Number(c.notice_period_days)) : null;
 }
 
+function planCalc(p) {
+  const t = TODAY(), start = p.start_on, end = p.end_on;
+  const days = daysBetween(start, end) + 1, left = Math.max(1, daysBetween(t, end) + 1), elapsed = Math.max(0, days - left);
+  const outs = leaves().filter(x => x.amount_cents < 0 && x.booked_on >= start && x.booked_on <= end && !isTransfer(x));
+  const spentVar = -outs.filter(x => !x.contract_id).reduce((s, x) => s + Number(x.amount_cents), 0);
+  const spentFix = -outs.filter(x => x.contract_id).reduce((s, x) => s + Number(x.amount_cents), 0);
+  const fixUp = []; if (p.include_contracts) for (const c of S.contracts.filter(c => c.status === 'active' && !c.is_income)) for (const d of occurrences(c, addDays(t, 1), end)) fixUp.push({ c, d });
+  const fixUpSum = -fixUp.reduce((s, x) => s + Number(x.c.amount_cents), 0);
+  const fixTotal = spentFix + fixUpSum;
+  const varBudget = Number(p.amount_cents) - fixTotal;
+  const remaining = varBudget - spentVar;
+  const perDay = Math.floor(remaining / left);
+  const ideal = Math.round(varBudget * elapsed / days);
+  const wk = (() => { const d = new Date(t + 'T12:00:00'); const dow = (d.getDay() + 6) % 7; return addDays(t, -dow); })();
+  const weekSpent = -outs.filter(x => !x.contract_id && x.booked_on >= wk).reduce((s, x) => s + Number(x.amount_cents), 0);
+  const last28 = -leaves().filter(x => x.amount_cents < 0 && !x.contract_id && !isTransfer(x) && x.booked_on > addDays(t, -28) && x.booked_on <= t).reduce((s, x) => s + Number(x.amount_cents), 0);
+  const pace = Math.round(last28 / 28);
+  const lastsUntil = pace > 0 && remaining > 0 ? addDays(t, Math.floor(remaining / pace)) : null;
+  return { days, left, elapsed, spentVar, fixUp, fixUpSum, fixTotal, varBudget, remaining, perDay, ideal, diff: spentVar - ideal, weekSpent, perWeek: perDay * 7, pace, lastsUntil, food: Math.floor(perDay * (p.food_share || 75) / 100) };
+}
+function vPlan() {
+  const p = S.plans[0];
+  if (!p) return `<button class="card tap" data-act="plan" style="padding:16px;text-align:left;color:var(--text)"><span style="font-size:15px;font-weight:500">Spar-Plan anlegen</span><br><span class="muted" style="font-size:13px">Z. B. „mit 400 € bis 21. Dezember“ – die App rechnet dir täglich aus, wie viel du noch ausgeben kannst.</span></button>`;
+  const r = planCalc(p);
+  const pctUsed = r.varBudget > 0 ? Math.min(100, Math.round(r.spentVar / r.varBudget * 100)) : 100;
+  const pctTime = Math.round(r.elapsed / r.days * 100);
+  const bad = r.remaining <= 0;
+  return `<section class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px;border-color:rgba(200,176,122,.4)">
+    <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:17px;font-weight:600">${esc(p.name)}</span><button class="btn" data-act="plan" data-id="${p.id}" style="height:32px;padding:0 12px;font-size:13px">Ändern</button></div>
+    <span class="muted" style="font-size:13px;margin-top:-6px">${eurPlain(p.amount_cents)} vom ${fmtDate(p.start_on)} bis ${fmtDate(p.end_on)} · noch ${r.left} Tage</span>
+    <div class="stack" style="gap:2px"><span class="muted" style="font-size:13px">Realistisch ab heute pro Tag</span>
+      <span style="font-size:40px;line-height:44px;color:${bad ? 'var(--danger)' : 'var(--accent)'}">${eur(Math.max(0, r.perDay))}</span>
+      <span style="font-size:14px">${bad ? 'Das Plan-Geld ist aufgebraucht.' : `= ${eurPlain(r.perWeek)} pro Woche · davon ~${eurPlain(r.food)} am Tag fürs Essen`}</span></div>
+    <div style="position:relative"><div class="bar"><i style="width:${pctUsed}%;background:${r.diff > 0 ? 'var(--danger)' : 'var(--accent)'}"></i></div><span style="position:absolute;top:-3px;left:calc(${pctTime}% - 1px);width:2px;height:14px;background:var(--text);border-radius:2px" aria-hidden="true"></span></div>
+    <span style="font-size:13px" class="${r.diff > 0 ? 'neg' : 'pos'}">${r.diff > 0 ? `${eurPlain(r.diff)} über Plan` : `${eurPlain(-r.diff)} unter Plan – gut`} <span class="muted">(Strich = heute)</span></span>
+    <div class="stack">
+      <div class="kv"><span>Startbetrag</span>${eur(Number(p.amount_cents))}</div>
+      <div class="kv"><span>Fixkosten im Zeitraum</span>${eur(-r.fixTotal)}</div>
+      <div class="kv"><span>Ausgegeben seit ${fmtDate(p.start_on)}</span>${eur(-r.spentVar)}</div>
+      <div class="kv"><span>Diese Woche</span><span class="${r.weekSpent > r.perWeek ? 'neg' : ''}">${eurPlain(r.weekSpent)} <span class="muted">/ ${eurPlain(r.perWeek)}</span></span></div>
+      <div class="kv"><span><b style="font-weight:600;color:var(--text)">Bleibt zum Leben</b></span><b style="font-weight:600" class="${bad ? 'neg' : ''}">${eur(r.remaining)}</b></div>
+    </div>
+    <div style="margin:0 -18px -18px;padding:12px 18px;border-top:1px solid var(--border);font-size:13px;line-height:19px">
+      Dein Tempo der letzten 4 Wochen: <b style="font-weight:600">${eurPlain(r.pace)} pro Tag</b>${r.lastsUntil && r.lastsUntil < p.end_on ? ` – damit wäre das Plan-Geld am <b class="neg" style="font-weight:600">${fmtDate(r.lastsUntil, { day: 'numeric', month: 'long' })}</b> weg.` : r.pace ? ' – damit kommst du hin.' : '.'}
+    </div>
+  </section>`;
+}
 function vBudget() {
   const w = wealth(), o = outlook(), t = TODAY();
   const [mf, me] = monthRange(0);
@@ -641,6 +694,7 @@ function vBudget() {
   return `<div class="scroll stack" style="gap:16px">
     <header class="stack" style="gap:4px"><h1>Geld</h1><span class="muted" style="font-size:13px">Stand ${fmtDate(t, { day: 'numeric', month: 'long' })}</span></header>
 
+    ${vPlan()}
     <section class="card" style="padding:18px;display:flex;flex-direction:column;gap:8px">
       <span class="muted" style="font-size:14px">Cash jetzt (alle Konten)</span>
       <span style="font-size:40px;line-height:44px">${eur(w.cash)}</span>
@@ -803,6 +857,20 @@ function vSheet() {
       <a class="btn primary block" style="display:flex;align-items:center;justify-content:center;text-decoration:none" href="mailto:${encodeURIComponent(c.cancel_email || '')}?subject=${encodeURIComponent('Kündigung ' + c.provider + (c.customer_number ? ' – Kundennr. ' + c.customer_number : ''))}&body=${encodeURIComponent(sh.letter)}" data-act="c-sent" data-id="${c.id}">In Mail-App öffnen</a>
       <button class="btn block" data-act="copy-letter">Text kopieren</button>`);
   }
+  if (sh.kind === 'plan') {
+    const p = sh.id ? S.plans.find(x => x.id === sh.id) : { name: '', amount_cents: 40000, start_on: TODAY(), end_on: addDays(TODAY(), 30), include_contracts: true, food_share: 75 };
+    const r = sh.id ? planCalc(p) : null;
+    return wrap('Spar-Plan', sheetHead(sh.id ? 'Spar-Plan' : 'Neuer Spar-Plan') + `
+      <label class="field">Name<input name="name" required value="${esc(p.name)}" placeholder="z. B. Oviedo bis Dezember" autocomplete="off"></label>
+      <label class="field">Geld für den Zeitraum in €<input name="amt" inputmode="decimal" required value="${(p.amount_cents / 100).toFixed(0)}"></label>
+      <div style="display:flex;gap:10px"><label class="field" style="flex:1">Von<input name="start" type="date" required value="${p.start_on}"></label><label class="field" style="flex:1">Bis<input name="end" type="date" required value="${p.end_on}"></label></div>
+      <label class="field">Anteil Essen am Tagesbudget: <b id="fs-v" style="color:var(--text);font-weight:500">${p.food_share} %</b><input name="food" type="range" min="0" max="100" step="5" value="${p.food_share}" style="height:auto;border:0;padding:0;accent-color:var(--accent)"></label>
+      <label class="toggle"><span>Fixkosten (Verträge) aus diesem Geld bezahlen</span><input type="checkbox" name="fix" ${p.include_contracts ? 'checked' : ''}></label>
+      ${r && r.fixUp.length ? `<div class="stack"><span class="over" style="font-size:11px">Noch fällig im Zeitraum</span>${r.fixUp.map(x => `<div class="kv"><span>${fmtDate(x.d)} · ${esc(x.c.provider)}</span>${eur(Number(x.c.amount_cents))}</div>`).join('')}</div>` : ''}
+      ${sh.err ? `<p class="err" role="alert">${esc(sh.err)}</p>` : ''}
+      <button class="btn primary block" type="submit">Speichern</button>
+      ${sh.id ? `<button type="button" class="btn block" data-act="plan-end" data-id="${p.id}" style="background:transparent;color:var(--muted);font-weight:400">Plan beenden</button>` : ''}`, true, 'plan-form');
+  }
   if (sh.kind === 'position') {
     const p = sh.id ? S.positions.find(x => x.id === sh.id) : { name: '', kind: 'aktie', broker: 'Trade Republic', invested_cents: 0, value_cents: 0 };
     const v = c => c ? (Number(c) / 100).toFixed(2).replace('.', ',') : '';
@@ -843,7 +911,7 @@ function render() {
   el.innerHTML = view + (S.err ? `<p class="err" style="padding:0 20px" role="alert">${esc(S.err)}</p>` : '') +
     `<nav class="nav" aria-label="Hauptnavigation">${tab('home', 'Übersicht', 'home')}${tab('tx', 'Umsätze', 'list')}${tab('contracts', 'Verträge', 'repeat')}${tab('budget', 'Geld', 'pie')}</nav>` +
     vSheet() + (S.toast ? `<div class="toast${render.toastEnter ? ' enter' : ''}" role="status">${esc(S.toast)}</div>` : '') +
-    `<div class="topbar" aria-hidden="true">${{ home: 'Übersicht', tx: 'Umsätze', contracts: 'Verträge', budget: 'Geld' }[S.tab]}</div><div class="ptr" aria-hidden="true"><span>${svg('repeat', 16)}</span></div>`;
+    `<button class="refresh-fab${S.syncing ? ' busy' : ''}" data-act="sync" aria-label="${S.syncing ? 'Wird aktualisiert' : 'Jetzt aktualisieren'}"${S.syncing ? ' disabled' : ''}><span class="${S.syncing ? 'spin' : ''}" style="display:flex">${svg('repeat', 18)}</span></button><div class="topbar" aria-hidden="true">${{ home: 'Übersicht', tx: 'Umsätze', contracts: 'Verträge', budget: 'Geld' }[S.tab]}</div><div class="ptr" aria-hidden="true"><span>${svg('repeat', 16)}</span></div>`;
   const nsc = el.querySelector('.scroll'); if (nsc && !render.resetScroll) nsc.scrollTop = top; render.resetScroll = false;
   const nss = el.querySelector('.sheet'); if (nss && !render.resetSheet) nss.scrollTop = stop; render.resetSheet = false;
   afterRender();
@@ -973,6 +1041,8 @@ document.addEventListener('click', async e => {
       case 'detect': { const n = await rpc('fin_detect_contracts', {}); toast(n ? `${n} neue Verträge erkannt` : 'Keine neuen Verträge'); await load(); break; }
       case 'new-budget': openSheet({ kind: 'budget' }); break;
       case 'new-position': openSheet({ kind: 'position' }); break;
+      case 'plan': openSheet({ kind: 'plan', id: id || null }); break;
+      case 'plan-end': await sb.from('fin_plans').update({ active: false }).eq('id', id); closeSheet(); toast('Plan beendet'); await load(); break;
       case 'position': openSheet({ kind: 'position', id }); break;
       case 'p-del': if (window.confirm('Position löschen?')) { await sb.from('fin_positions').delete().eq('id', id); S.sheet = null; toast('Gelöscht'); await load(); } break;
       case 'budget': openSheet({ kind: 'budget', id }); break;
@@ -987,6 +1057,7 @@ document.addEventListener('input', e => {
   if (e.target.id === 'q') { S.q = e.target.value; render(); }
   if (e.target.id === 'bq' && S.sheet) { S.sheet.q = e.target.value; render(); }
   if (e.target.id === 'letter' && S.sheet) S.sheet.letter = e.target.value;
+  if (e.target.name === 'food') { const v = document.getElementById('fs-v'); if (v) v.textContent = e.target.value + ' %'; }
 });
 document.addEventListener('change', e => { if (e.target.id === 'remember' && S.sheet) S.sheet.remember = e.target.checked; });
 document.addEventListener('submit', async e => {
@@ -1041,6 +1112,12 @@ document.addEventListener('submit', async e => {
       if (sh.kind === 'new-contract') { row.status = 'active'; row.counterparty_pattern = null; const { error } = await sb.from('fin_contracts').insert(row); if (error) throw error; }
       else { const c = S.contracts.find(x => x.id === sh.id); if (c.status === 'suggested') row.status = 'active'; const { error } = await sb.from('fin_contracts').update(row).eq('id', sh.id); if (error) throw error; }
       S.sheet = null; toast('Gespeichert'); await load();
+    } else if (f.id === 'plan-form') {
+      const amt = parseEuro(d.get('amt'));
+      if (!amt || d.get('end') <= d.get('start')) { sh.err = 'Betrag und gültigen Zeitraum eingeben.'; render(); return; }
+      const row = { name: d.get('name').trim(), amount_cents: Math.abs(amt), start_on: d.get('start'), end_on: d.get('end'), food_share: parseInt(d.get('food'), 10), include_contracts: !!d.get('fix'), active: true };
+      const { error } = sh.id ? await sb.from('fin_plans').update(row).eq('id', sh.id) : await sb.from('fin_plans').insert(row);
+      if (error) throw error; closeSheet(); toast('Plan gespeichert'); await load();
     } else if (f.id === 'p-form') {
       const inv = parseEuro(d.get('inv')) || 0, val = parseEuro(d.get('val')) || 0;
       const row = { name: d.get('name').trim(), kind: d.get('kind'), broker: (d.get('broker') || '').trim() || null, invested_cents: Math.abs(inv), value_cents: Math.abs(val), value_updated_at: TODAY() };
